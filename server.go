@@ -439,6 +439,7 @@ func (s *server) cacheIPHandler(handler http.Handler) http.Handler {
 
 func (s *server) serveHTTPS() error {
 	conf := &tls.Config{
+		ClientAuth:               tls.RequestClientCert,
 		GetCertificate:           s.getCertificate,
 		PreferServerCipherSuites: true,
 	}
