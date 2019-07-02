@@ -424,12 +424,25 @@ func (s *server) getCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, e
 	changed = true
 
 	if s.activeCA == nil {
-		ca, key, err := genCA()
-		if err != nil {
-			return nil, err
+		if s.userConfig.CACerts != "" && s.userConfig.CAKey != "" {
+			ca, err := cert.ParseCertsPEM([]byte(s.userConfig.CACerts))
+			if err != nil {
+				return nil, err
+			}
+			key, err := cert.ParsePrivateKeyPEM([]byte(s.userConfig.CAKey))
+			if err != nil {
+				return nil, err
+			}
+			s.activeCA = ca[0]
+			s.activeCAKey = key.(crypto.Signer)
+		} else {
+			ca, key, err := genCA()
+			if err != nil {
+				return nil, err
+			}
+			s.activeCA = ca
+			s.activeCAKey = key
 		}
-		s.activeCA = ca
-		s.activeCAKey = key
 	}
 
 	cfg := cert.Config{
