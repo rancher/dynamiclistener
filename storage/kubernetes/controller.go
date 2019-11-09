@@ -127,7 +127,16 @@ func (s *storage) Update(secret *v1.Secret) (err error) {
 	s.Lock()
 	defer s.Unlock()
 
-	secret, err = s.saveInK8s(secret)
+	for i := 0; i < 3; i++ {
+		secret, err = s.saveInK8s(secret)
+		if errors.IsConflict(err) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		break
+	}
+
 	if err != nil {
 		return err
 	}
