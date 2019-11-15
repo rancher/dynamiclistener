@@ -132,10 +132,10 @@ func (s *storage) saveInK8s(secret *v1.Secret) (*v1.Secret, error) {
 	targetSecret.Data = secret.Data
 
 	if targetSecret.UID == "" {
-		logrus.Infof("Creating new TLS secret for %v (count: %d)", targetSecret.Name, len(targetSecret.Data)-1)
+		logrus.Infof("Creating new TLS secret for %v (count: %d): %v", targetSecret.Name, len(targetSecret.Annotations)-1, targetSecret.Annotations)
 		return s.secrets.Create(targetSecret)
 	} else {
-		logrus.Infof("Updating TLS secret for %v (count: %d)", targetSecret.Name, len(targetSecret.Data)-1)
+		logrus.Infof("Updating TLS secret for %v (count: %d): %v", targetSecret.Name, len(targetSecret.Annotations)-1, targetSecret.Annotations)
 		return s.secrets.Update(targetSecret)
 	}
 }
