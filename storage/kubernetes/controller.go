@@ -80,9 +80,19 @@ func (s *storage) init(secrets v1controller.SecretController) {
 	})
 	s.secrets = secrets
 
-	secret, err := s.storage.Get()
-	if err == nil && secret != nil {
-		s.saveInK8s(secret)
+	if secret, err := s.storage.Get(); err == nil && secret != nil && len(secret.Data) > 0 {
+		// just ensure there is a secret in k3s
+		if _, err := s.secrets.Get(s.namespace, s.name, metav1.GetOptions{}); errors.IsNotFound(err) {
+			_, _ = s.secrets.Create(&v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        s.name,
+					Namespace:   s.namespace,
+					Annotations: secret.Annotations,
+				},
+				Type: v1.SecretTypeTLS,
+				Data: secret.Data,
+			})
+		}
 	}
 }
 
