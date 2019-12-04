@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rancher/dynamiclistener"
-	"github.com/rancher/dynamiclistener/factory"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/core"
 	v1controller "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/start"
@@ -18,6 +17,17 @@ import (
 )
 
 type CoreGetter func() *core.Factory
+
+func Load(ctx context.Context, secrets v1controller.SecretController, namespace, name string, backing dynamiclistener.TLSStorage) dynamiclistener.TLSStorage {
+	storage := &storage{
+		name:      name,
+		namespace: namespace,
+		storage:   backing,
+		ctx:       ctx,
+	}
+	storage.init(secrets)
+	return storage
+}
 
 func New(ctx context.Context, core CoreGetter, namespace, name string, backing dynamiclistener.TLSStorage) dynamiclistener.TLSStorage {
 	storage := &storage{
@@ -55,10 +65,10 @@ type storage struct {
 	storage         dynamiclistener.TLSStorage
 	secrets         v1controller.SecretClient
 	ctx             context.Context
-	tls             *factory.TLS
+	tls             dynamiclistener.TLSFactory
 }
 
-func (s *storage) SetFactory(tls *factory.TLS) {
+func (s *storage) SetFactory(tls dynamiclistener.TLSFactory) {
 	s.tls = tls
 }
 

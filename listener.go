@@ -19,8 +19,13 @@ type TLSStorage interface {
 	Update(secret *v1.Secret) error
 }
 
+type TLSFactory interface {
+	AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error)
+	Merge(secret *v1.Secret, existing *v1.Secret) (*v1.Secret, bool, error)
+}
+
 type SetFactory interface {
-	SetFactory(tls *factory.TLS)
+	SetFactory(tls TLSFactory)
 }
 
 type Config struct {
@@ -63,7 +68,7 @@ type listener struct {
 	sync.RWMutex
 	net.Listener
 
-	factory   *factory.TLS
+	factory   TLSFactory
 	storage   TLSStorage
 	version   string
 	tlsConfig tls.Config

@@ -19,7 +19,7 @@ import (
 
 const (
 	cnPrefix = "listener.cattle.io/cn-"
-	static   = "listener.cattle.io/static"
+	Static   = "listener.cattle.io/static"
 	hashKey  = "listener.cattle.io/hash"
 )
 
@@ -122,7 +122,7 @@ func populateCN(secret *v1.Secret, cn ...string) *v1.Secret {
 }
 
 func NeedsUpdate(secret *v1.Secret, cn ...string) bool {
-	if secret.Annotations[static] == "true" {
+	if secret.Annotations[Static] == "true" {
 		return false
 	}
 
