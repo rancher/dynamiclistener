@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 
@@ -11,15 +13,36 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler) error {
+type ListenOpts struct {
+	CA      *x509.Certificate
+	CAKey   crypto.Signer
+	Storage dynamiclistener.TLSStorage
+}
+
+func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
 	var (
 		// https listener will change this if http is enabled
 		targetHandler = handler
 	)
+
+	if opts == nil {
+		opts = &ListenOpts{}
+	}
+
 	if httpsPort > 0 {
-		caCert, caKey, err := factory.LoadOrGenCA()
-		if err != nil {
-			return err
+		var (
+			caCert *x509.Certificate
+			caKey  crypto.Signer
+			err    error
+		)
+
+		if opts.CA != nil && opts.CAKey != nil {
+			caCert, caKey = opts.CA, opts.CAKey
+		} else {
+			caCert, caKey, err = factory.LoadOrGenCA()
+			if err != nil {
+				return err
+			}
 		}
 
 		tlsTCPListener, err := dynamiclistener.NewTCPListener("0.0.0.0", httpsPort)
@@ -27,7 +50,12 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 			return err
 		}
 
-		dynListener, dynHandler, err := dynamiclistener.NewListener(tlsTCPListener, memory.New(), caCert, caKey, dynamiclistener.Config{})
+		storage := opts.Storage
+		if storage == nil {
+			storage = memory.New()
+		}
+
+		dynListener, dynHandler, err := dynamiclistener.NewListener(tlsTCPListener, storage, caCert, caKey, dynamiclistener.Config{})
 		if err != nil {
 			return err
 		}
