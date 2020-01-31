@@ -44,6 +44,10 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 		opts = &ListenOpts{}
 	}
 
+	if opts.TLSListenerConfig.TLSConfig == nil {
+		opts.TLSListenerConfig.TLSConfig = &tls.Config{}
+	}
+
 	logger := logrus.StandardLogger()
 	errorLog := log.New(logger.WriterLevel(logrus.DebugLevel), "", log.LstdFlags)
 
@@ -108,7 +112,7 @@ func getTLSListener(ctx context.Context, tcp net.Listener, opts ListenOpts) (net
 	}
 
 	if len(opts.TLSListenerConfig.TLSConfig.Certificates) > 0 {
-		return tls.NewListener(tcp, &opts.TLSListenerConfig.TLSConfig), nil, nil
+		return tls.NewListener(tcp, opts.TLSListenerConfig.TLSConfig), nil, nil
 	}
 
 	if len(opts.AcmeDomains) > 0 {
@@ -210,5 +214,5 @@ func acmeListener(tcp net.Listener, opts ListenOpts) net.Listener {
 		return manager.GetCertificate(hello)
 	}
 
-	return tls.NewListener(tcp, &opts.TLSListenerConfig.TLSConfig)
+	return tls.NewListener(tcp, opts.TLSListenerConfig.TLSConfig)
 }

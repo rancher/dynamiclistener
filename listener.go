@@ -38,6 +38,9 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 	if len(config.Organization) == 0 {
 		config.Organization = []string{"dynamic"}
 	}
+	if config.TLSConfig == nil {
+		config.TLSConfig = &tls.Config{}
+	}
 
 	dynamicListener := &listener{
 		factory: &factory.TLS{
@@ -51,6 +54,9 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		sans:      config.SANs,
 		tlsConfig: config.TLSConfig,
 	}
+	if dynamicListener.tlsConfig == nil {
+		dynamicListener.tlsConfig = &tls.Config{}
+	}
 	dynamicListener.tlsConfig.GetCertificate = dynamicListener.getCertificate
 
 	if setter, ok := storage.(SetFactory); ok {
@@ -61,7 +67,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		config.ExpirationDaysCheck = 30
 	}
 
-	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), &dynamicListener.tlsConfig)
+	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
 	return tlsListener, dynamicListener.cacheHandler(), nil
 }
 
@@ -78,7 +84,7 @@ func (c *cancelClose) Close() error {
 type Config struct {
 	CN                  string
 	Organization        []string
-	TLSConfig           tls.Config
+	TLSConfig           *tls.Config
 	SANs                []string
 	ExpirationDaysCheck int
 }
@@ -90,7 +96,7 @@ type listener struct {
 	factory   TLSFactory
 	storage   TLSStorage
 	version   string
-	tlsConfig tls.Config
+	tlsConfig *tls.Config
 	cert      *tls.Certificate
 	sans      []string
 	init      sync.Once
