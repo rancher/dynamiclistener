@@ -1,6 +1,7 @@
 package dynamiclistener
 
 import (
+	"context"
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rancher/dynamiclistener/factory"
 	"github.com/sirupsen/logrus"
@@ -20,19 +22,13 @@ type TLSStorage interface {
 }
 
 type TLSFactory interface {
+	Refresh(secret *v1.Secret) (*v1.Secret, error)
 	AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error)
 	Merge(secret *v1.Secret, existing *v1.Secret) (*v1.Secret, bool, error)
 }
 
 type SetFactory interface {
 	SetFactory(tls TLSFactory)
-}
-
-type Config struct {
-	CN           string
-	Organization []string
-	TLSConfig    tls.Config
-	SANs         []string
 }
 
 func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, caKey crypto.Signer, config Config) (net.Listener, http.Handler, error) {
@@ -61,7 +57,30 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		setter.SetFactory(dynamicListener.factory)
 	}
 
-	return tls.NewListener(dynamicListener, &dynamicListener.tlsConfig), dynamicListener.cacheHandler(), nil
+	if config.ExpirationDaysCheck == 0 {
+		config.ExpirationDaysCheck = 30
+	}
+
+	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), &dynamicListener.tlsConfig)
+	return tlsListener, dynamicListener.cacheHandler(), nil
+}
+
+type cancelClose struct {
+	cancel func()
+	net.Listener
+}
+
+func (c *cancelClose) Close() error {
+	c.cancel()
+	return c.Listener.Close()
+}
+
+type Config struct {
+	CN                  string
+	Organization        []string
+	TLSConfig           tls.Config
+	SANs                []string
+	ExpirationDaysCheck int
 }
 
 type listener struct {
@@ -75,6 +94,69 @@ type listener struct {
 	cert      *tls.Certificate
 	sans      []string
 	init      sync.Once
+}
+
+func (l *listener) WrapExpiration(days int) net.Listener {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(5 * time.Minute)
+
+		for {
+			wait := 6 * time.Hour
+			if err := l.checkExpiration(days); err != nil {
+				logrus.Errorf("failed to check and refresh dynamic cert: %v", err)
+				wait = 5 + time.Minute
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+		}
+	}()
+
+	return &cancelClose{
+		cancel:   cancel,
+		Listener: l,
+	}
+}
+
+func (l *listener) checkExpiration(days int) error {
+	l.Lock()
+	defer l.Unlock()
+
+	if days == 0 {
+		return nil
+	}
+
+	if l.cert == nil {
+		return nil
+	}
+
+	secret, err := l.storage.Get()
+	if err != nil {
+		return err
+	}
+
+	cert, err := tls.X509KeyPair(secret.Data[v1.TLSCertKey], secret.Data[v1.TLSPrivateKeyKey])
+	if err != nil {
+		return err
+	}
+
+	certParsed, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return err
+	}
+
+	if time.Now().UTC().Add(time.Hour * 24 * time.Duration(days)).After(certParsed.NotAfter) {
+		secret, err := l.factory.Refresh(secret)
+		if err != nil {
+			return err
+		}
+		return l.storage.Update(secret)
+	}
+
+	return nil
 }
 
 func (l *listener) Accept() (net.Conn, error) {
