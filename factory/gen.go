@@ -31,6 +31,9 @@ type TLS struct {
 }
 
 func cns(secret *v1.Secret) (cns []string) {
+	if secret == nil {
+		return nil
+	}
 	for k, v := range secret.Annotations {
 		if strings.HasPrefix(k, cnPrefix) {
 			cns = append(cns, v)
@@ -63,6 +66,14 @@ func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, hash string,
 
 func (t *TLS) Merge(secret, other *v1.Secret) (*v1.Secret, bool, error) {
 	return t.AddCN(secret, cns(other)...)
+}
+
+func (t *TLS) Refresh(secret *v1.Secret) (*v1.Secret, error) {
+	cns := cns(secret)
+	secret = secret.DeepCopy()
+	secret.Annotations = map[string]string{}
+	secret, _, err := t.AddCN(secret, cns...)
+	return secret, err
 }
 
 func (t *TLS) AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error) {
