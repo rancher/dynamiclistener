@@ -52,6 +52,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		Listener:  l,
 		storage:   &nonNil{storage: storage},
 		sans:      config.SANs,
+		maxSANs:   config.MaxSANs,
 		tlsConfig: config.TLSConfig,
 	}
 	if dynamicListener.tlsConfig == nil {
@@ -90,6 +91,7 @@ type Config struct {
 	Organization          []string
 	TLSConfig             *tls.Config
 	SANs                  []string
+	MaxSANs               int
 	ExpirationDaysCheck   int
 	CloseConnOnCertChange bool
 }
@@ -108,6 +110,7 @@ type listener struct {
 	tlsConfig *tls.Config
 	cert      *tls.Certificate
 	sans      []string
+	maxSANs   int
 	init      sync.Once
 }
 
@@ -261,7 +264,7 @@ func (l *listener) updateCert(cn ...string) error {
 		return err
 	}
 
-	if !factory.NeedsUpdate(secret, cn...) {
+	if !factory.NeedsUpdate(l.maxSANs, secret, cn...) {
 		return nil
 	}
 
