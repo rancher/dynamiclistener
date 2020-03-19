@@ -61,6 +61,9 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 	dynamicListener.tlsConfig.GetCertificate = dynamicListener.getCertificate
 
 	if config.CloseConnOnCertChange {
+		if len(dynamicListener.tlsConfig.Certificates) == 0 {
+			dynamicListener.tlsConfig.NextProtos = []string{"http/1.1"}
+		}
 		dynamicListener.conns = map[int]*closeWrapper{}
 	}
 
@@ -284,14 +287,13 @@ func (l *listener) updateCert(cn ...string) error {
 		}
 		// clear version to force cert reload
 		l.version = ""
-	}
-
-	if l.conns != nil {
-		l.connLock.Lock()
-		for _, conn := range l.conns {
-			_ = conn.close()
+		if l.conns != nil {
+			l.connLock.Lock()
+			for _, conn := range l.conns {
+				_ = conn.close()
+			}
+			l.connLock.Unlock()
 		}
-		l.connLock.Unlock()
 	}
 
 	return nil
