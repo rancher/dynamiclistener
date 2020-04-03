@@ -205,7 +205,7 @@ func (l *listener) Accept() (net.Conn, error) {
 
 	if !strings.Contains(host, ":") {
 		if err := l.updateCert(host); err != nil {
-			logrus.Infof("failed to create TLS cert for: %s", host)
+			logrus.Infof("failed to create TLS cert for: %s, %v", host, err)
 		}
 	}
 
