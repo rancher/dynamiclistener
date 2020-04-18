@@ -49,7 +49,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 			CAKey:        caKey,
 			CN:           config.CN,
 			Organization: config.Organization,
-			FilterCN:     config.FilterCN,
+			FilterCN:     allowDefaultSANs(config.SANs, config.FilterCN),
 		},
 		Listener:  l,
 		storage:   &nonNil{storage: storage},
@@ -79,6 +79,35 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
 	return tlsListener, dynamicListener.cacheHandler(), nil
+}
+
+func allowDefaultSANs(sans []string, next func(...string) []string) func(...string) []string {
+	if next == nil {
+		return nil
+	} else if len(sans) == 0 {
+		return next
+	}
+
+	sanMap := map[string]bool{}
+	for _, san := range sans {
+		sanMap[san] = true
+	}
+
+	return func(s ...string) []string {
+		var (
+			good    []string
+			unknown []string
+		)
+		for _, s := range s {
+			if sanMap[s] {
+				good = append(good, s)
+			} else {
+				unknown = append(unknown, s)
+			}
+		}
+
+		return append(good, next(unknown...)...)
+	}
 }
 
 type cancelClose struct {
