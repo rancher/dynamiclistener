@@ -367,6 +367,7 @@ func (l *listener) loadCert() (*tls.Certificate, error) {
 	}
 
 	l.cert = &cert
+	l.version = secret.ResourceVersion
 	return l.cert, nil
 }
 
