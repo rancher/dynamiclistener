@@ -5,10 +5,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
+	"crypto/sha1"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
+	"fmt"
 	"net"
 	"regexp"
 	"sort"
@@ -49,16 +49,14 @@ func cns(secret *v1.Secret) (cns []string) {
 	return
 }
 
-func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, hash string, err error) {
+func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, err error) {
 	var (
-		cns    = cns(secret)
-		digest = sha256.New()
+		cns = cns(secret)
 	)
 
 	sort.Strings(cns)
 
 	for _, v := range cns {
-		digest.Write([]byte(v))
 		ip := net.ParseIP(v)
 		if ip == nil {
 			domains = append(domains, v)
@@ -67,40 +65,51 @@ func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, hash string,
 		}
 	}
 
-	hash = hex.EncodeToString(digest.Sum(nil))
 	return
 }
 
 func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
-	return t.AddCN(target, cns(additional)...)
+	secret, updated, err := t.AddCN(target, cns(additional)...)
+	// AddCN returns early if the CNs are the same, but we also need to handle the case
+	// where the secret has been renewed with the same CNs. Since the kubernetes storage backend
+	// uses Merge to detect changes, we return the second secret and note that it has been updated.
+	if !updated {
+		if target.Annotations[hashKey] != additional.Annotations[hashKey] {
+			secret = additional
+			updated = true
+		}
+	}
+	return secret, updated, err
 }
 
-func (t *TLS) Refresh(secret *v1.Secret) (*v1.Secret, error) {
+func (t *TLS) Renew(secret *v1.Secret) (*v1.Secret, error) {
+	if IsStatic(secret) {
+		return secret, cert.ErrStaticCert
+	}
 	cns := cns(secret)
 	secret = secret.DeepCopy()
 	secret.Annotations = map[string]string{}
-	secret, _, err := t.AddCN(secret, cns...)
+	secret, _, err := t.generateCert(secret, cns...)
 	return secret, err
 }
 
 func (t *TLS) Filter(cn ...string) []string {
-	if t.FilterCN == nil {
+	if len(cn) == 0 || t.FilterCN == nil {
 		return cn
 	}
 	return t.FilterCN(cn...)
 }
 
 func (t *TLS) AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error) {
-	var (
-		err error
-	)
-
 	cn = t.Filter(cn...)
 
-	if !NeedsUpdate(0, secret, cn...) {
+	if IsStatic(secret) || !NeedsUpdate(0, secret, cn...) {
 		return secret, false, nil
 	}
+	return t.generateCert(secret, cn...)
+}
 
+func (t *TLS) generateCert(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error) {
 	secret = secret.DeepCopy()
 	if secret == nil {
 		secret = &v1.Secret{}
@@ -113,7 +122,7 @@ func (t *TLS) AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error) {
 		return nil, false, err
 	}
 
-	domains, ips, hash, err := collectCNs(secret)
+	domains, ips, err := collectCNs(secret)
 	if err != nil {
 		return nil, false, err
 	}
@@ -133,7 +142,7 @@ func (t *TLS) AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error) {
 	}
 	secret.Data[v1.TLSCertKey] = certBytes
 	secret.Data[v1.TLSPrivateKeyKey] = keyBytes
-	secret.Annotations[hashKey] = hash
+	secret.Annotations[hashKey] = fmt.Sprintf("SHA1=%X", sha1.Sum(newCert.Raw))
 
 	return secret, true, nil
 }
@@ -157,13 +166,13 @@ func populateCN(secret *v1.Secret, cn ...string) *v1.Secret {
 	return secret
 }
 
+func IsStatic(secret *v1.Secret) bool {
+	return secret.Annotations[Static] == "true"
+}
+
 func NeedsUpdate(maxSANs int, secret *v1.Secret, cn ...string) bool {
 	if secret == nil {
 		return true
-	}
-
-	if secret.Annotations[Static] == "true" {
-		return false
 	}
 
 	for _, cn := range cn {
