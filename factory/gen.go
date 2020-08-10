@@ -71,7 +71,8 @@ func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, err error) {
 // Merge combines the SAN lists from the target and additional Secrets, and returns a potentially modified Secret,
 // along with a bool indicating if the returned Secret has been updated or not. If the two SAN lists alread matched
 // and no merging was necessary, but the Secrets' certificate fingerprints differed, the second secret is returned
-// and the updated bool is set to true despite neither certificate having actually been modified.
+// and the updated bool is set to true despite neither certificate having actually been modified. This is required
+// to support handling certificate renewal within the kubernetes storage provider.
 func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
 	secret, updated, err := t.AddCN(target, cns(additional)...)
 	if !updated {
@@ -84,7 +85,8 @@ func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
 }
 
 // Renew returns a copy of the given certificate that has been re-signed
-// to extend the NotAfter date.
+// to extend the NotAfter date. It is an error to attempt to renew
+// a static (user-provided) certificate.
 func (t *TLS) Renew(secret *v1.Secret) (*v1.Secret, error) {
 	if IsStatic(secret) {
 		return secret, cert.ErrStaticCert

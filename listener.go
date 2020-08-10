@@ -157,9 +157,14 @@ func (l *listener) WrapExpiration(days int) net.Listener {
 
 		for {
 			wait := 6 * time.Hour
-			if err := l.checkExpiration(days); err != nil && err != cert.ErrStaticCert {
+			if err := l.checkExpiration(days); err != nil {
 				logrus.Errorf("failed to check and renew dynamic cert: %v", err)
-				wait = 5 * time.Minute
+				// Don't go into short retry loop if we're using a static (user-provided) cert.
+				// We will still check and print an error every six hours until the user updates the secret with
+				// a cert that is not about to expire. Hopefully this will prompt them to take action.
+				if err != cert.ErrStaticCert {
+					wait = 5 * time.Minute
+				}
 			}
 			select {
 			case <-ctx.Done():
