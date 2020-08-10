@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	cnPrefix = "listener.cattle.io/cn-"
-	Static   = "listener.cattle.io/static"
-	hashKey  = "listener.cattle.io/hash"
+	cnPrefix    = "listener.cattle.io/cn-"
+	Static      = "listener.cattle.io/static"
+	fingerprint = "listener.cattle.io/fingerprint"
 )
 
 var (
@@ -68,13 +68,14 @@ func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, err error) {
 	return
 }
 
+// Merge combines the SAN lists from the target and additional Secrets, and returns a potentially modified Secret,
+// along with a bool indicating if the returned Secret has been updated or not. If the two SAN lists alread matched
+// and no merging was necessary, but the Secrets' certificate fingerprints differed, the second secret is returned
+// and the updated bool is set to true despite neither certificate having actually been modified.
 func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
 	secret, updated, err := t.AddCN(target, cns(additional)...)
-	// AddCN returns early if the CNs are the same, but we also need to handle the case
-	// where the secret has been renewed with the same CNs. Since the kubernetes storage backend
-	// uses Merge to detect changes, we return the second secret and note that it has been updated.
 	if !updated {
-		if target.Annotations[hashKey] != additional.Annotations[hashKey] {
+		if target.Annotations[fingerprint] != additional.Annotations[fingerprint] {
 			secret = additional
 			updated = true
 		}
@@ -82,6 +83,8 @@ func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
 	return secret, updated, err
 }
 
+// Renew returns a copy of the given certificate that has been re-signed
+// to extend the NotAfter date.
 func (t *TLS) Renew(secret *v1.Secret) (*v1.Secret, error) {
 	if IsStatic(secret) {
 		return secret, cert.ErrStaticCert
@@ -93,6 +96,8 @@ func (t *TLS) Renew(secret *v1.Secret) (*v1.Secret, error) {
 	return secret, err
 }
 
+// Filter ensures that the CNs are all valid accorting to both internal logic, and any filter callbacks.
+// The returned list will contain only approved CN entries.
 func (t *TLS) Filter(cn ...string) []string {
 	if len(cn) == 0 || t.FilterCN == nil {
 		return cn
@@ -100,6 +105,9 @@ func (t *TLS) Filter(cn ...string) []string {
 	return t.FilterCN(cn...)
 }
 
+// AddCN attempts to add a list of CN strings to a given Secret, returning the potentially-modified
+// Secret along with a bool indicating whether or not it has been updated. The Secret will not be changed
+// if it has an attribute indicating that it is static (aka user-provided), or if no new CNs were added.
 func (t *TLS) AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error) {
 	cn = t.Filter(cn...)
 
@@ -142,7 +150,7 @@ func (t *TLS) generateCert(secret *v1.Secret, cn ...string) (*v1.Secret, bool, e
 	}
 	secret.Data[v1.TLSCertKey] = certBytes
 	secret.Data[v1.TLSPrivateKeyKey] = keyBytes
-	secret.Annotations[hashKey] = fmt.Sprintf("SHA1=%X", sha1.Sum(newCert.Raw))
+	secret.Annotations[fingerprint] = fmt.Sprintf("SHA1=%X", sha1.Sum(newCert.Raw))
 
 	return secret, true, nil
 }

@@ -96,7 +96,7 @@ func NewSignedCert(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.
 
 	parsedCert, err := x509.ParseCertificate(cert)
 	if err == nil {
-		logrus.Infof("certificate %v signed by %v: notBefore=%v notAfter=%v",
+		logrus.Infof("certificate %s signed by %s: notBefore=%s notAfter=%s",
 			parsedCert.Subject, caCert.Subject, parsedCert.NotBefore, parsedCert.NotAfter)
 	}
 	return parsedCert, err
