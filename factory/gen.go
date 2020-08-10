@@ -174,10 +174,16 @@ func populateCN(secret *v1.Secret, cn ...string) *v1.Secret {
 	return secret
 }
 
+// IsStatic returns true if the Secret has an attribute indicating that it contains
+// a static (aka user-provided) certificate, which should not be modified.
 func IsStatic(secret *v1.Secret) bool {
 	return secret.Annotations[Static] == "true"
 }
 
+// NeedsUpdate returns true if any of the CNs are not currently present on the
+// secret's Certificate, as recorded in the cnPrefix annotations. It will return
+// false if all requested CNs are already present, or if maxSANs is non-zero and has
+// been exceeded.
 func NeedsUpdate(maxSANs int, secret *v1.Secret, cn ...string) bool {
 	if secret == nil {
 		return true
@@ -209,6 +215,7 @@ func getPrivateKey(secret *v1.Secret) (crypto.Signer, error) {
 	return NewPrivateKey()
 }
 
+// Marshal returns the given cert and key as byte slices.
 func Marshal(x509Cert *x509.Certificate, privateKey crypto.Signer) ([]byte, []byte, error) {
 	certBlock := pem.Block{
 		Type:  CertificateBlockType,
@@ -223,6 +230,7 @@ func Marshal(x509Cert *x509.Certificate, privateKey crypto.Signer) ([]byte, []by
 	return pem.EncodeToMemory(&certBlock), keyBytes, nil
 }
 
+// NewPrivateKey returnes a new ECDSA key
 func NewPrivateKey() (crypto.Signer, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 }
