@@ -21,13 +21,17 @@ const (
 )
 
 func NewSelfSignedCACert(key crypto.Signer, cn string, org ...string) (*x509.Certificate, error) {
-	now := time.Now()
+	validNotAfter := time.Now().Add(time.Hour * 24 * 365 * 10).UTC()
+	return NewSelfSignedCACertValidNotAfter(key, cn, validNotAfter, org...)
+}
+
+func NewSelfSignedCACertValidNotAfter(key crypto.Signer, cn string, validNotAfter time.Time, org ...string) (*x509.Certificate, error) {
 	tmpl := x509.Certificate{
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		NotAfter:              now.Add(time.Hour * 24 * 365 * 10).UTC(),
-		NotBefore:             now.UTC(),
+		NotAfter:              validNotAfter,
+		NotBefore:             time.Now().UTC(),
 		SerialNumber:          new(big.Int).SetInt64(0),
 		Subject: pkix.Name{
 			CommonName:   cn,
@@ -44,6 +48,13 @@ func NewSelfSignedCACert(key crypto.Signer, cn string, org ...string) (*x509.Cer
 }
 
 func NewSignedClientCert(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.Signer, cn string) (*x509.Certificate, error) {
+	validNotAfter := time.Now().Add(time.Hour * 24 * 365).UTC()
+	return NewSignedClientCertValidNotAfter(signer, caCert, caKey, cn, validNotAfter)
+}
+
+func NewSignedClientCertValidNotAfter(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.Signer,
+	cn string, validNotAfter time.Time) (*x509.Certificate, error) {
+
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).SetInt64(math.MaxInt64))
 	if err != nil {
 		return nil, err
@@ -52,7 +63,7 @@ func NewSignedClientCert(signer crypto.Signer, caCert *x509.Certificate, caKey c
 	parent := x509.Certificate{
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		NotAfter:     time.Now().Add(time.Hour * 24 * 365).UTC(),
+		NotAfter:     validNotAfter,
 		NotBefore:    caCert.NotBefore,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
@@ -77,6 +88,13 @@ func NewSignedClientCert(signer crypto.Signer, caCert *x509.Certificate, caKey c
 func NewSignedCert(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.Signer, cn string, orgs []string,
 	domains []string, ips []net.IP) (*x509.Certificate, error) {
 
+	validNotAfter := time.Now().Add(time.Hour * 24 * 365).UTC()
+	return NewSignedCertValidNotAfter(signer, caCert, caKey, cn, orgs, domains, ips, validNotAfter)
+}
+
+func NewSignedCertValidNotAfter(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.Signer, cn string, orgs []string,
+	domains []string, ips []net.IP, validNotAfter time.Time) (*x509.Certificate, error) {
+
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).SetInt64(math.MaxInt64))
 	if err != nil {
 		return nil, err
@@ -87,7 +105,7 @@ func NewSignedCert(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IPAddresses:  ips,
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		NotAfter:     time.Now().Add(time.Hour * 24 * 365).UTC(),
+		NotAfter:     validNotAfter,
 		NotBefore:    caCert.NotBefore,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
