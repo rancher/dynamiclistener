@@ -74,7 +74,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		setter.SetFactory(dynamicListener.factory)
 	}
 
-	if config.RegenerateCerts() {
+	if config.RegenerateCerts != nil && config.RegenerateCerts() {
 		if err := dynamicListener.regenerateCerts(); err != nil {
 			return nil, nil, err
 		}
