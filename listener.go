@@ -74,11 +74,18 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		setter.SetFactory(dynamicListener.factory)
 	}
 
+	if config.RegenerateCerts() {
+		if err := dynamicListener.regenerateCerts(); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	if config.ExpirationDaysCheck == 0 {
 		config.ExpirationDaysCheck = 30
 	}
 
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
+
 	return tlsListener, dynamicListener.cacheHandler(), nil
 }
 
@@ -129,6 +136,7 @@ type Config struct {
 	MaxSANs               int
 	ExpirationDaysCheck   int
 	CloseConnOnCertChange bool
+	RegenerateCerts       func() bool
 	FilterCN              func(...string) []string
 }
 
@@ -178,6 +186,29 @@ func (l *listener) WrapExpiration(days int) net.Listener {
 		cancel:   cancel,
 		Listener: l,
 	}
+}
+
+// regenerateCerts regenerates the used certificates and
+// updates the secret.
+func (l *listener) regenerateCerts() error {
+	l.Lock()
+	defer l.Unlock()
+
+	secret, err := l.storage.Get()
+	if err != nil {
+		return err
+	}
+
+	newSecret, err := l.factory.Renew(secret)
+	if err != nil {
+		return err
+	}
+	if err := l.storage.Update(newSecret); err != nil {
+		return err
+	}
+	l.version = ""
+
+	return nil
 }
 
 func (l *listener) checkExpiration(days int) error {
