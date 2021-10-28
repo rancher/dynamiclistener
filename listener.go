@@ -206,6 +206,7 @@ func (l *listener) regenerateCerts() error {
 	if err := l.storage.Update(newSecret); err != nil {
 		return err
 	}
+	// clear version to force cert reload
 	l.version = ""
 
 	return nil
