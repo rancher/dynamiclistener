@@ -299,7 +299,7 @@ func (l *listener) getCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate,
 		}
 	}
 
-	return l.loadCert(newConn.(*closeWrapper))
+	return l.loadCert(newConn)
 }
 
 func (l *listener) updateCert(cn ...string) error {
@@ -341,7 +341,7 @@ func (l *listener) updateCert(cn ...string) error {
 	return nil
 }
 
-func (l *listener) loadCert(currentConn *closeWrapper) (*tls.Certificate, error) {
+func (l *listener) loadCert(currentConn net.Conn) (*tls.Certificate, error) {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -381,7 +381,7 @@ func (l *listener) loadCert(currentConn *closeWrapper) (*tls.Certificate, error)
 			}
 			_ = conn.close()
 		}
-		l.conns[currentConn.id].ready = true
+		l.conns[currentConn.(*closeWrapper).id].ready = true
 		l.connLock.Unlock()
 	}
 
