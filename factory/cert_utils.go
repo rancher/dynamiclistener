@@ -87,7 +87,7 @@ func NewSignedCert(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IPAddresses:  ips,
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		NotAfter:     time.Now().Add(time.Hour * 24 * 365).UTC(),
+		NotAfter:     time.Now().Add(time.Second * 30).UTC(),
 		NotBefore:    caCert.NotBefore,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{

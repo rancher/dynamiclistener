@@ -57,6 +57,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		sans:      config.SANs,
 		maxSANs:   config.MaxSANs,
 		tlsConfig: config.TLSConfig,
+		skipLoadedCertCheck: config.SkipLoadedCertCheck,
 	}
 	if dynamicListener.tlsConfig == nil {
 		dynamicListener.tlsConfig = &tls.Config{}
@@ -75,7 +76,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 	}
 
 	if config.ExpirationDaysCheck == 0 {
-		config.ExpirationDaysCheck = 30
+		config.ExpirationDaysCheck = 1
 	}
 
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
@@ -130,6 +131,7 @@ type Config struct {
 	ExpirationDaysCheck   int
 	CloseConnOnCertChange bool
 	FilterCN              func(...string) []string
+	SkipLoadedCertCheck bool
 }
 
 type listener struct {
@@ -148,22 +150,23 @@ type listener struct {
 	sans      []string
 	maxSANs   int
 	init      sync.Once
+	skipLoadedCertCheck bool
 }
 
 func (l *listener) WrapExpiration(days int) net.Listener {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		for {
-			wait := 6 * time.Hour
+			wait := 15 * time.Second
 			if err := l.checkExpiration(days); err != nil {
 				logrus.Errorf("failed to check and renew dynamic cert: %v", err)
 				// Don't go into short retry loop if we're using a static (user-provided) cert.
 				// We will still check and print an error every six hours until the user updates the secret with
 				// a cert that is not about to expire. Hopefully this will prompt them to take action.
 				if err != cert.ErrStaticCert {
-					wait = 5 * time.Minute
+					wait = 5 * time.Second
 				}
 			}
 			select {
@@ -188,7 +191,7 @@ func (l *listener) checkExpiration(days int) error {
 		return nil
 	}
 
-	if l.cert == nil {
+	if l.cert == nil && !l.skipLoadedCertCheck {
 		return nil
 	}
 
