@@ -130,6 +130,7 @@ type Config struct {
 	ExpirationDaysCheck   int
 	CloseConnOnCertChange bool
 	FilterCN              func(...string) []string
+	SkipLoadedCertCheck   bool
 }
 
 type listener struct {
@@ -140,14 +141,15 @@ type listener struct {
 	connID   int
 	connLock sync.Mutex
 
-	factory   TLSFactory
-	storage   TLSStorage
-	version   string
-	tlsConfig *tls.Config
-	cert      *tls.Certificate
-	sans      []string
-	maxSANs   int
-	init      sync.Once
+	factory             TLSFactory
+	storage             TLSStorage
+	version             string
+	tlsConfig           *tls.Config
+	cert                *tls.Certificate
+	sans                []string
+	maxSANs             int
+	init                sync.Once
+	skipLoadedCertCheck bool
 }
 
 func (l *listener) WrapExpiration(days int) net.Listener {
@@ -188,7 +190,7 @@ func (l *listener) checkExpiration(days int) error {
 		return nil
 	}
 
-	if l.cert == nil {
+	if l.cert == nil && !l.skipLoadedCertCheck {
 		return nil
 	}
 
