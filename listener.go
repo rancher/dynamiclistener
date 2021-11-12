@@ -27,6 +27,7 @@ type TLSFactory interface {
 	AddCN(secret *v1.Secret, cn ...string) (*v1.Secret, bool, error)
 	Merge(target *v1.Secret, additional *v1.Secret) (*v1.Secret, bool, error)
 	Filter(cn ...string) []string
+	Regenerate() (*v1.Secret, error)
 }
 
 type SetFactory interface {
@@ -194,12 +195,7 @@ func (l *listener) regenerateCerts() error {
 	l.Lock()
 	defer l.Unlock()
 
-	secret, err := l.storage.Get()
-	if err != nil {
-		return err
-	}
-
-	newSecret, err := l.factory.Renew(secret)
+	newSecret, err := l.factory.Regenerate()
 	if err != nil {
 		return err
 	}
