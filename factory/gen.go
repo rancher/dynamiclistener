@@ -6,7 +6,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -195,7 +197,7 @@ func populateCN(secret *v1.Secret, cn ...string) *v1.Secret {
 	}
 	for _, cn := range cn {
 		if cnRegexp.MatchString(cn) {
-			secret.Annotations[cnPrefix+cn] = cn
+			secret.Annotations[getAnnotationKey(cn)] = cn
 		} else {
 			logrus.Errorf("dropping invalid CN: %s", cn)
 		}
@@ -222,7 +224,7 @@ func NeedsUpdate(maxSANs int, secret *v1.Secret, cn ...string) bool {
 	}
 
 	for _, cn := range cn {
-		if secret.Annotations[cnPrefix+cn] == "" {
+		if secret.Annotations[getAnnotationKey(cn)] == "" {
 			if maxSANs > 0 && len(cns(secret)) >= maxSANs {
 				return false
 			}
@@ -265,4 +267,23 @@ func Marshal(x509Cert *x509.Certificate, privateKey crypto.Signer) ([]byte, []by
 // NewPrivateKey returnes a new ECDSA key
 func NewPrivateKey() (crypto.Signer, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+}
+
+// getAnnotationKey return the key to use for a given CN. IPv4 addresses and short hostnames
+// are safe to store as-is, but longer hostnames and IPv6 address must be truncated and/or undergo
+// character replacement in order to be used as an annotation key. If the CN requires modification,
+// a portion of the SHA256 sum of the original value is used as the suffix, to reduce the likelihood
+// of collisions in modified values.
+func getAnnotationKey(cn string) string {
+	cn = cnPrefix + cn
+	cnLen := len(cn)
+	if cnLen < 64 && !strings.ContainsRune(cn, ':') {
+		return cn
+	}
+	digest := sha256.Sum256([]byte(cn))
+	cn = strings.ReplaceAll(cn, ":", "_")
+	if cnLen > 56 {
+		cnLen = 56
+	}
+	return cn[0:cnLen] + "-" + hex.EncodeToString(digest[0:])[0:6]
 }
