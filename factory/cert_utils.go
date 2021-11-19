@@ -89,7 +89,7 @@ func NewSignedCert(signer crypto.Signer, caCert *x509.Certificate, caKey crypto.
 	envExpirationDays := os.Getenv("CATTLE_NEW_SIGNED_CERT_EXPIRATION_DAYS")
 	if envExpirationDays != "" {
 		if envExpirationDaysInt, err := strconv.Atoi(envExpirationDays); err != nil {
-			logrus.Infof("[NewSignedCert] expiration days from ENV (%s) could not be converted to int (falling back to default value: %d)", envExpirationDays, defaultExpirationDays)
+			logrus.Infof("[NewSignedCert] expiration days from ENV (%s) could not be converted to int (falling back to default value: %d)", envExpirationDays, defaultNewSignedCertExpirationDays)
 		} else {
 			expirationDays = envExpirationDaysInt
 		}
