@@ -53,7 +53,7 @@ type Config struct {
 	Organization     []string
 	AltNames         AltNames
 	Usages           []x509.ExtKeyUsage
-	ExpirationInDays int
+	ExpirationInDays time.Duration
 }
 
 // AltNames contains the domain names and IP addresses that will be added
@@ -109,11 +109,11 @@ func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKe
 	if len(cfg.Usages) == 0 {
 		return nil, errors.New("must specify at least one ExtKeyUsage")
 	}
-	var expiration int
+	var expiration time.Duration
 	if cfg.ExpirationInDays > 0 {
-		expiration = cfg.ExpirationInDays
+		expiration = time.Duration(cfg.ExpirationInDays)
 	} else {
-		expiration = 365
+		expiration = duration365d
 	}
 
 	certTmpl := x509.Certificate{
@@ -125,7 +125,7 @@ func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKe
 		IPAddresses:  cfg.AltNames.IPs,
 		SerialNumber: serial,
 		NotBefore:    caCert.NotBefore,
-		NotAfter:     time.Now().AddDate(0, 0, expiration).UTC(),
+		NotAfter:     time.Now().Add(expiration).UTC(),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  cfg.Usages,
 	}
