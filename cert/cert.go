@@ -49,11 +49,11 @@ var ErrStaticCert = errors.New("cannot renew static certificate")
 
 // Config contains the basic fields required for creating a certificate.
 type Config struct {
-	CommonName       string
-	Organization     []string
-	AltNames         AltNames
-	Usages           []x509.ExtKeyUsage
-	ExpirationInDays time.Duration
+	CommonName   string
+	Organization []string
+	AltNames     AltNames
+	Usages       []x509.ExtKeyUsage
+	ExpiresAt    time.Duration
 }
 
 // AltNames contains the domain names and IP addresses that will be added
@@ -109,11 +109,11 @@ func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKe
 	if len(cfg.Usages) == 0 {
 		return nil, errors.New("must specify at least one ExtKeyUsage")
 	}
-	var expiration time.Duration
-	if cfg.ExpirationInDays > 0 {
-		expiration = time.Duration(cfg.ExpirationInDays)
+	var expiresAt time.Duration
+	if cfg.ExpiresAt > 0 {
+		expiresAt = time.Duration(cfg.ExpiresAt)
 	} else {
-		expiration = duration365d
+		expiresAt = duration365d
 	}
 
 	certTmpl := x509.Certificate{
@@ -125,7 +125,7 @@ func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKe
 		IPAddresses:  cfg.AltNames.IPs,
 		SerialNumber: serial,
 		NotBefore:    caCert.NotBefore,
-		NotAfter:     time.Now().Add(expiration).UTC(),
+		NotAfter:     time.Now().Add(expiresAt).UTC(),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  cfg.Usages,
 	}
