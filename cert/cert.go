@@ -45,16 +45,15 @@ const (
 	duration365d = time.Hour * 24 * 365
 )
 
-var (
-	ErrStaticCert = errors.New("cannot renew static certificate")
-)
+var ErrStaticCert = errors.New("cannot renew static certificate")
 
-// Config contains the basic fields required for creating a certificate
+// Config contains the basic fields required for creating a certificate.
 type Config struct {
-	CommonName   string
-	Organization []string
-	AltNames     AltNames
-	Usages       []x509.ExtKeyUsage
+	CommonName       string
+	Organization     []string
+	AltNames         AltNames
+	Usages           []x509.ExtKeyUsage
+	ExpirationInDays int
 }
 
 // AltNames contains the domain names and IP addresses that will be added
@@ -97,7 +96,8 @@ func NewSelfSignedCACert(cfg Config, key crypto.Signer) (*x509.Certificate, erro
 	return x509.ParseCertificate(certDERBytes)
 }
 
-// NewSignedCert creates a signed certificate using the given CA certificate and key
+// NewSignedCert creates a signed certificate using the given CA certificate and key based
+// on the given configuration.
 func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKey crypto.Signer) (*x509.Certificate, error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).SetInt64(math.MaxInt64))
 	if err != nil {
@@ -109,6 +109,12 @@ func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKe
 	if len(cfg.Usages) == 0 {
 		return nil, errors.New("must specify at least one ExtKeyUsage")
 	}
+	var expiration int
+	if cfg.ExpirationInDays > 0 {
+		expiration = cfg.ExpirationInDays
+	} else {
+		expiration = 365
+	}
 
 	certTmpl := x509.Certificate{
 		Subject: pkix.Name{
@@ -119,7 +125,7 @@ func NewSignedCert(cfg Config, key crypto.Signer, caCert *x509.Certificate, caKe
 		IPAddresses:  cfg.AltNames.IPs,
 		SerialNumber: serial,
 		NotBefore:    caCert.NotBefore,
-		NotAfter:     time.Now().Add(duration365d).UTC(),
+		NotAfter:     time.Now().AddDate(0, 0, expiration).UTC(),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  cfg.Usages,
 	}
