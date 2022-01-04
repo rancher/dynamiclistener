@@ -68,20 +68,41 @@ func collectCNs(secret *v1.Secret) (domains []string, ips []net.IP, err error) {
 	return
 }
 
-// Merge combines the SAN lists from the target and additional Secrets, and returns a potentially modified Secret,
-// along with a bool indicating if the returned Secret has been updated or not. If the two SAN lists alread matched
-// and no merging was necessary, but the Secrets' certificate fingerprints differed, the second secret is returned
-// and the updated bool is set to true despite neither certificate having actually been modified. This is required
-// to support handling certificate renewal within the kubernetes storage provider.
+// Merge combines the SAN lists from the target and additional Secrets, and
+// returns a potentially modified Secret, along with a bool indicating if the
+// returned Secret is not the same as the target Secret.
+//
+// If the merge would not add any CNs to the additional Secret, the additional
+// Secret is returned, to allow for certificate rotation/regeneration.
+//
+// If the merge would not add any CNs to the target Secret, the target Secret is
+// returned; no merging is necessary.
+//
+// If neither certificate is acceptable as-is, a new certificate containing
+// the union of the two lists is generated, using the private key from the
+// first Secret. The returned Secret will contain the updated cert.
 func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
-	secret, updated, err := t.AddCN(target, cns(additional)...)
-	if !updated {
-		if target.Annotations[fingerprint] != additional.Annotations[fingerprint] {
-			secret = additional
-			updated = true
-		}
+	// static secrets can't be altered, don't bother trying
+	if IsStatic(target) {
+		return target, false, nil
 	}
-	return secret, updated, err
+
+	mergedCNs := append(cns(target), cns(additional)...)
+
+	// if the additional secret already has all the CNs, use it in preference to the
+	// current one. This behavior is required to allow for renewal or regeneration.
+	if !NeedsUpdate(0, additional, mergedCNs...) {
+		return additional, true, nil
+	}
+
+	// if the target secret already has all the CNs, continue using it. The additional
+	// cert had only a subset of the current CNs, so nothing needs to be added.
+	if !NeedsUpdate(0, target, mergedCNs...) {
+		return target, false, nil
+	}
+
+	// neither cert currently has all the necessary CNs; generate a new one.
+	return t.generateCert(target, mergedCNs...)
 }
 
 // Renew returns a copy of the given certificate that has been re-signed
