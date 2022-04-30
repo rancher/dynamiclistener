@@ -408,6 +408,9 @@ func (l *listener) loadCert(currentConn net.Conn) (*tls.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !cert.IsValidTLSSecret(secret) {
+		return l.cert, nil
+	}
 	if l.cert != nil && l.version == secret.ResourceVersion && secret.ResourceVersion != "" {
 		return l.cert, nil
 	}
