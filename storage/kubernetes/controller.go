@@ -225,8 +225,5 @@ func (s *storage) update(secret *v1.Secret) (err error) {
 func (s *storage) controllerHasSynced() bool {
 	s.RLock()
 	defer s.RUnlock()
-	if s.secrets == nil {
-		return false
-	}
-	return s.secrets.Informer().HasSynced()
+	return s.secrets != nil
 }
