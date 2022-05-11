@@ -171,7 +171,7 @@ func (l *listener) WrapExpiration(days int) net.Listener {
 		for {
 			wait := 6 * time.Hour
 			if err := l.checkExpiration(days); err != nil {
-				logrus.Errorf("failed to check and renew dynamic cert: %v", err)
+				logrus.Errorf("dynamiclistener %s: failed to check and renew dynamic cert: %v", l.Addr(), err)
 				// Don't go into short retry loop if we're using a static (user-provided) cert.
 				// We will still check and print an error every six hours until the user updates the secret with
 				// a cert that is not about to expire. Hopefully this will prompt them to take action.
@@ -263,12 +263,18 @@ func (l *listener) Accept() (net.Conn, error) {
 	l.init.Do(func() {
 		if len(l.sans) > 0 {
 			if err := l.updateCert(l.sans...); err != nil {
-				logrus.Errorf("failed to update cert with configured SANs: %v", err)
+				logrus.Errorf("dynamiclistener %s: failed to update cert with configured SANs: %v", l.Addr(), err)
 				return
 			}
-			if _, err := l.loadCert(nil); err != nil {
-				logrus.Errorf("failed to preload certificate: %v", err)
-			}
+		}
+		if cert, err := l.loadCert(nil); err != nil {
+			logrus.Errorf("dynamiclistener %s: failed to preload certificate: %v", l.Addr(), err)
+		} else if cert == nil {
+			// This should only occur on the first startup when no SANs are configured in the listener config, in which
+			// case no certificate can be created, as dynamiclistener will not create certificates until at least one IP
+			// or DNS SAN is set. It will also occur when using the Kubernetes storage without a local File cache.
+			// For reliable serving of requests, callers should configure a local cache and/or a default set of SANs.
+			logrus.Warnf("dynamiclistener %s: no cached certificate available for preload - deferring certificate load until storage initialization or first client request", l.Addr())
 		}
 	})
 
@@ -284,13 +290,13 @@ func (l *listener) Accept() (net.Conn, error) {
 
 	host, _, err := net.SplitHostPort(addr.String())
 	if err != nil {
-		logrus.Errorf("failed to parse network %s: %v", addr.Network(), err)
+		logrus.Errorf("dynamiclistener %s: failed to parse connection address %s: %v", l.Addr(), addr, err)
 		return conn, nil
 	}
 
 	if !strings.Contains(host, ":") {
 		if err := l.updateCert(host); err != nil {
-			logrus.Errorf("failed to update cert with listener address: %v", err)
+			logrus.Errorf("dynamiclistener %s: failed to update cert with listener address: %v", l.Addr(), err)
 		}
 	}
 
@@ -338,7 +344,7 @@ func (l *listener) getCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate,
 	newConn := hello.Conn
 	if hello.ServerName != "" {
 		if err := l.updateCert(hello.ServerName); err != nil {
-			logrus.Errorf("failed to update cert with TLS ServerName: %v", err)
+			logrus.Errorf("dynamiclistener %s: failed to update cert with TLS ServerName: %v", l.Addr(), err)
 			return nil, err
 		}
 	}
@@ -455,7 +461,7 @@ func (l *listener) cacheHandler() http.Handler {
 			}
 
 			if err := l.updateCert(h); err != nil {
-				logrus.Errorf("failed to update cert with HTTP request Host header: %v", err)
+				logrus.Errorf("dynamiclistener %s: failed to update cert with HTTP request Host header: %v", l.Addr(), err)
 			}
 		}
 	})
