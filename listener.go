@@ -290,14 +290,12 @@ func (l *listener) Accept() (net.Conn, error) {
 
 	host, _, err := net.SplitHostPort(addr.String())
 	if err != nil {
-		logrus.Errorf("dynamiclistener %s: failed to parse connection address %s: %v", l.Addr(), addr, err)
+		logrus.Errorf("dynamiclistener %s: failed to parse connection local address %s: %v", l.Addr(), addr, err)
 		return conn, nil
 	}
 
-	if !strings.Contains(host, ":") {
-		if err := l.updateCert(host); err != nil {
-			logrus.Errorf("dynamiclistener %s: failed to update cert with listener address: %v", l.Addr(), err)
-		}
+	if err := l.updateCert(host); err != nil {
+		logrus.Errorf("dynamiclistener %s: failed to update cert with connection local address: %v", l.Addr(), err)
 	}
 
 	if l.conns != nil {
