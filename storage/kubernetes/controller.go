@@ -69,6 +69,8 @@ type storage struct {
 }
 
 func (s *storage) SetFactory(tls dynamiclistener.TLSFactory) {
+	s.Lock()
+	defer s.Unlock()
 	s.tls = tls
 }
 
@@ -109,7 +111,9 @@ func (s *storage) init(secrets v1controller.SecretController) {
 		// local storage was empty, try to populate it
 		secret, err := s.secrets.Get(s.namespace, s.name, metav1.GetOptions{})
 		if err != nil {
-			logrus.Warnf("Failed to init Kubernetes secret: %v", err)
+			if !errors.IsNotFound(err) {
+				logrus.Warnf("Failed to init Kubernetes secret: %v", err)
+			}
 			return
 		}
 
@@ -144,7 +148,7 @@ func (s *storage) targetSecret() (*v1.Secret, error) {
 }
 
 func (s *storage) saveInK8s(secret *v1.Secret) (*v1.Secret, error) {
-	if !s.controllerHasSynced() {
+	if !s.initComplete() {
 		return secret, nil
 	}
 
@@ -206,9 +210,14 @@ func (s *storage) Update(secret *v1.Secret) error {
 	return nil
 }
 
+func isConflictOrAlreadyExists(err error) bool {
+	return errors.IsConflict(err) || errors.IsAlreadyExists(err)
+}
+
 func (s *storage) update(secret *v1.Secret) (err error) {
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		secret, err = s.saveInK8s(secret)
+	var newSecret *v1.Secret
+	err = retry.OnError(retry.DefaultRetry, isConflictOrAlreadyExists, func() error {
+		newSecret, err = s.saveInK8s(secret)
 		return err
 	})
 
@@ -219,14 +228,11 @@ func (s *storage) update(secret *v1.Secret) (err error) {
 	// Only hold the lock while updating underlying storage
 	s.Lock()
 	defer s.Unlock()
-	return s.storage.Update(secret)
+	return s.storage.Update(newSecret)
 }
 
-func (s *storage) controllerHasSynced() bool {
+func (s *storage) initComplete() bool {
 	s.RLock()
 	defer s.RUnlock()
-	if s.secrets == nil {
-		return false
-	}
-	return s.secrets.Informer().HasSynced()
+	return s.secrets != nil
 }
