@@ -33,11 +33,12 @@ var (
 )
 
 type TLS struct {
-	CACert       *x509.Certificate
-	CAKey        crypto.Signer
-	CN           string
-	Organization []string
-	FilterCN     func(...string) []string
+	CACert              *x509.Certificate
+	CAKey               crypto.Signer
+	CN                  string
+	Organization        []string
+	FilterCN            func(...string) []string
+	ExpirationDaysCheck int
 }
 
 func cns(secret *v1.Secret) (cns []string) {
@@ -95,13 +96,13 @@ func (t *TLS) Merge(target, additional *v1.Secret) (*v1.Secret, bool, error) {
 
 	// if the additional secret already has all the CNs, use it in preference to the
 	// current one. This behavior is required to allow for renewal or regeneration.
-	if !NeedsUpdate(0, additional, mergedCNs...) && !IsExpired(additional) {
+	if !NeedsUpdate(0, additional, mergedCNs...) && !t.IsExpired(additional) {
 		return additional, true, nil
 	}
 
 	// if the target secret already has all the CNs, continue using it. The additional
 	// cert had only a subset of the current CNs, so nothing needs to be added.
-	if !NeedsUpdate(0, target, mergedCNs...) && !IsExpired(target) {
+	if !NeedsUpdate(0, target, mergedCNs...) && !t.IsExpired(target) {
 		return target, false, nil
 	}
 
@@ -193,7 +194,7 @@ func (t *TLS) generateCert(secret *v1.Secret, cn ...string) (*v1.Secret, bool, e
 	return secret, true, nil
 }
 
-func IsExpired(secret *v1.Secret) bool {
+func (t *TLS) IsExpired(secret *v1.Secret) bool {
 	certsPem := secret.Data[v1.TLSCertKey]
 	if len(certsPem) == 0 {
 		return false
@@ -204,7 +205,8 @@ func IsExpired(secret *v1.Secret) bool {
 		return false
 	}
 
-	return time.Now().After(certificates[0].NotAfter)
+	expirationDays := time.Duration(t.ExpirationDaysCheck) * time.Hour * 24
+	return time.Now().Add(expirationDays).After(certificates[0].NotAfter)
 }
 
 func (t *TLS) Verify(secret *v1.Secret) error {

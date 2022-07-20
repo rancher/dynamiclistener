@@ -45,14 +45,18 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 	if config.TLSConfig == nil {
 		config.TLSConfig = &tls.Config{}
 	}
+	if config.ExpirationDaysCheck == 0 {
+		config.ExpirationDaysCheck = 90
+	}
 
 	dynamicListener := &listener{
 		factory: &factory.TLS{
-			CACert:       caCert,
-			CAKey:        caKey,
-			CN:           config.CN,
-			Organization: config.Organization,
-			FilterCN:     allowDefaultSANs(config.SANs, config.FilterCN),
+			CACert:              caCert,
+			CAKey:               caKey,
+			CN:                  config.CN,
+			Organization:        config.Organization,
+			FilterCN:            allowDefaultSANs(config.SANs, config.FilterCN),
+			ExpirationDaysCheck: config.ExpirationDaysCheck,
 		},
 		Listener:  l,
 		storage:   &nonNil{storage: storage},
@@ -80,10 +84,6 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 		if err := dynamicListener.regenerateCerts(); err != nil {
 			return nil, nil, err
 		}
-	}
-
-	if config.ExpirationDaysCheck == 0 {
-		config.ExpirationDaysCheck = 30
 	}
 
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
