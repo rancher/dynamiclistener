@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"net"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -163,9 +162,9 @@ type listener struct {
 func (l *listener) WrapExpiration(days int) net.Listener {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		// busy-wait for certificate preload to complete
+		// loop on short sleeps until certificate preload completes
 		for l.cert == nil {
-			runtime.Gosched()
+			time.Sleep(time.Millisecond)
 		}
 
 		for {
