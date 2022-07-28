@@ -58,6 +58,7 @@ func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, c
 			ExpirationDaysCheck: config.ExpirationDaysCheck,
 		},
 		Listener:  l,
+		certReady: make(chan struct{}),
 		storage:   &nonNil{storage: storage},
 		sans:      config.SANs,
 		maxSANs:   config.MaxSANs,
@@ -154,6 +155,7 @@ type listener struct {
 	version   string
 	tlsConfig *tls.Config
 	cert      *tls.Certificate
+	certReady chan struct{}
 	sans      []string
 	maxSANs   int
 	init      sync.Once
@@ -162,9 +164,12 @@ type listener struct {
 func (l *listener) WrapExpiration(days int) net.Listener {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		// loop on short sleeps until certificate preload completes
-		for l.cert == nil {
-			time.Sleep(time.Millisecond)
+
+		// wait for cert to be set, this will unblock when the channel is closed
+		select {
+		case <-ctx.Done():
+			return
+		case <-l.certReady:
 		}
 
 		for {
@@ -437,7 +442,12 @@ func (l *listener) loadCert(currentConn net.Conn) (*tls.Certificate, error) {
 		l.connLock.Unlock()
 	}
 
+	// we can only close the ready channel once when the cert is first assigned
+	canClose := l.cert == nil
 	l.cert = &cert
+	if canClose {
+		close(l.certReady)
+	}
 	l.version = secret.ResourceVersion
 	return l.cert, nil
 }
