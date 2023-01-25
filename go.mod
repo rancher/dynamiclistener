@@ -3,8 +3,9 @@ module github.com/rancher/dynamiclistener
 go 1.19
 
 require (
-	github.com/rancher/wrangler v0.8.9
+	github.com/rancher/wrangler v0.8.11
 	github.com/sirupsen/logrus v1.4.2
+	github.com/stretchr/testify v1.8.0
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	k8s.io/api v0.18.8
 	k8s.io/apimachinery v0.18.8
@@ -29,7 +30,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08 // indirect
-	github.com/stretchr/testify v1.8.0 // indirect
 	golang.org/x/net v0.0.0-20221004154528-8021a29435af // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9 // indirect
