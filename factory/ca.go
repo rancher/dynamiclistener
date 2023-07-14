@@ -28,6 +28,9 @@ func GenCA() (*x509.Certificate, crypto.Signer, error) {
 // Deprecated: Use LoadOrGenCAChain instead as it supports intermediate CAs
 func LoadOrGenCA() (*x509.Certificate, crypto.Signer, error) {
 	chain, signer, err := LoadOrGenCAChain()
+	if err != nil {
+		return nil, nil, err
+	}
 	return chain[0], signer, err
 }
 
@@ -69,7 +72,10 @@ func loadCA() ([]*x509.Certificate, crypto.Signer, error) {
 
 func LoadCA(caPem, caKey []byte) (*x509.Certificate, crypto.Signer, error) {
 	chain, signer, err := LoadCAChain(caPem, caKey)
-	return chain[0], signer, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return chain[0], signer, nil
 }
 
 func LoadCAChain(caPem, caKey []byte) ([]*x509.Certificate, crypto.Signer, error) {
@@ -93,6 +99,9 @@ func LoadCAChain(caPem, caKey []byte) ([]*x509.Certificate, crypto.Signer, error
 // Deprecated: Use LoadCertsChain instead as it supports intermediate CAs
 func LoadCerts(certFile, keyFile string) (*x509.Certificate, crypto.Signer, error) {
 	chain, signer, err := LoadCertsChain(certFile, keyFile)
+	if err != nil {
+		return nil, nil, err
+	}
 	return chain[0], signer, err
 }
 

@@ -14,6 +14,9 @@ import (
 // Deprecated: Use LoadOrGenCAChain instead as it supports intermediate CAs
 func LoadOrGenCA(secrets v1controller.SecretClient, namespace, name string) (*x509.Certificate, crypto.Signer, error) {
 	chain, signer, err := LoadOrGenCAChain(secrets, namespace, name)
+	if err != nil {
+		return nil, nil, err
+	}
 	return chain[0], signer, err
 }
 
