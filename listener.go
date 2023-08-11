@@ -34,7 +34,12 @@ type SetFactory interface {
 	SetFactory(tls TLSFactory)
 }
 
+// Deprecated: Use NewListenerWithChain instead as it supports intermediate CAs
 func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, caKey crypto.Signer, config Config) (net.Listener, http.Handler, error) {
+	return NewListenerWithChain(l, storage, []*x509.Certificate{caCert}, caKey, config)
+}
+
+func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Certificate, caKey crypto.Signer, config Config) (net.Listener, http.Handler, error) {
 	if config.CN == "" {
 		config.CN = "dynamic"
 	}
