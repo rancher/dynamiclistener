@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/rancher/wrangler v1.1.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	k8s.io/api v0.25.4
 	k8s.io/apimachinery v0.25.4
