@@ -2,13 +2,11 @@ module github.com/rancher/dynamiclistener
 
 go 1.20
 
-replace github.com/rancher/wrangler => github.com/vardhaman22/wrangler v1.27.4-rancher1
-
 require (
-	github.com/rancher/wrangler v1.1.0
+	github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.1
-	golang.org/x/crypto v0.1.0
+	github.com/stretchr/testify v1.8.4
+	golang.org/x/crypto v0.11.0
 	k8s.io/api v0.27.4
 	k8s.io/apimachinery v0.27.4
 	k8s.io/client-go v0.27.4
@@ -43,16 +41,16 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	github.com/rancher/lasso v0.0.0-20230629200414-8a54b32e6792 // indirect
-	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b // indirect
+	github.com/rancher/lasso v0.0.0-20230830164424-d684fdeb6f29 // indirect
+	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/oauth2 v0.10.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
-	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/term v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
