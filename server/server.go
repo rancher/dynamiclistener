@@ -134,7 +134,7 @@ func getTLSListener(ctx context.Context, tcp net.Listener, handler http.Handler,
 		return nil, nil, err
 	}
 
-	listener, dynHandler, err := dynamiclistener.NewListener2(tcp, storage, caCert, caKey, opts.TLSListenerConfig)
+	listener, dynHandler, err := dynamiclistener.NewListenerWithChain(tcp, storage, caCert, caKey, opts.TLSListenerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
