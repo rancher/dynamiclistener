@@ -26,6 +26,7 @@ func Load(ctx context.Context, secrets v1controller.SecretController, namespace,
 		namespace: namespace,
 		storage:   backing,
 		ctx:       ctx,
+		initSync:  &sync.Once{},
 	}
 	storage.init(secrets)
 	return storage
@@ -37,6 +38,7 @@ func New(ctx context.Context, core CoreGetter, namespace, name string, backing d
 		namespace: namespace,
 		storage:   backing,
 		ctx:       ctx,
+		initSync:  &sync.Once{},
 	}
 
 	// lazy init
@@ -62,6 +64,7 @@ type storage struct {
 	ctx             context.Context
 	tls             dynamiclistener.TLSFactory
 	initialized     bool
+	initSync        *sync.Once
 }
 
 func (s *storage) SetFactory(tls dynamiclistener.TLSFactory) {
@@ -161,6 +164,20 @@ func (s *storage) targetSecret() (*v1.Secret, error) {
 
 func (s *storage) saveInK8s(secret *v1.Secret) (*v1.Secret, error) {
 	if !s.initComplete() {
+		// Start a goroutine to attempt to save the secret later, once init is complete.
+		// If this was already handled by initComplete, it should be a no-op, or at worst get
+		// merged with the Kubernetes secret.
+		go s.initSync.Do(func() {
+			if err := wait.Poll(100*time.Millisecond, 15*time.Minute, func() (bool, error) {
+				if !s.initComplete() {
+					return false, nil
+				}
+				_, err := s.saveInK8s(secret)
+				return true, err
+			}); err != nil {
+				logrus.Errorf("Failed to save TLS secret after controller init: %v", err)
+			}
+		})
 		return secret, nil
 	}
 
