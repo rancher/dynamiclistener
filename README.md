@@ -4,6 +4,9 @@ This `README` is a work in progress; aimed towards providing information for nav
 
 ## Changing the Expiration Days for Newly Signed Certificates
 
+By default, a newly signed CA certificate is set to expire 100 years after its creation time and date.
+You can use the `CATTLE_NEW_SIGNED_CA_EXPIRATION_YEARS` environment variable to change this value.
+
 By default, a newly signed certificate is set to expire 365 days (1 year) after its creation time and date.
 You can use the `CATTLE_NEW_SIGNED_CERT_EXPIRATION_DAYS` environment variable to change this value.
 
