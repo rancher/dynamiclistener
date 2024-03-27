@@ -12,7 +12,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -26,10 +25,6 @@ const (
 	cnPrefix    = "listener.cattle.io/cn-"
 	Static      = "listener.cattle.io/static"
 	fingerprint = "listener.cattle.io/fingerprint"
-)
-
-var (
-	cnRegexp = regexp.MustCompile("^([A-Za-z0-9:][-A-Za-z0-9_.:]*)?[A-Za-z0-9:]$")
 )
 
 type TLS struct {
@@ -244,7 +239,7 @@ func populateCN(secret *v1.Secret, cn ...string) *v1.Secret {
 		secret.Annotations = map[string]string{}
 	}
 	for _, cn := range cn {
-		if cnRegexp.MatchString(cn) {
+		if validHostnamePattern(cn) {
 			secret.Annotations[getAnnotationKey(cn)] = cn
 		} else {
 			logrus.Errorf("dropping invalid CN: %s", cn)
@@ -272,7 +267,7 @@ func NeedsUpdate(maxSANs int, secret *v1.Secret, cn ...string) bool {
 	}
 
 	for _, cn := range cn {
-		if secret.Annotations[getAnnotationKey(cn)] == "" {
+		if secret.Annotations[getAnnotationKey(cn)] == "" && secret.Annotations[getAnnotationKey(getWildcardSAN(cn))] == "" {
 			if maxSANs > 0 && len(cns(secret)) >= maxSANs {
 				return false
 			}
@@ -344,13 +339,82 @@ func NewPrivateKey() (crypto.Signer, error) {
 func getAnnotationKey(cn string) string {
 	cn = cnPrefix + cn
 	cnLen := len(cn)
-	if cnLen < 64 && !strings.ContainsRune(cn, ':') {
+	if cnLen < 64 && !strings.ContainsRune(cn, ':') && !strings.ContainsRune(cn, '*') {
 		return cn
 	}
 	digest := sha256.Sum256([]byte(cn))
+	// : only resides in IPv6 addresses
 	cn = strings.ReplaceAll(cn, ":", "_")
+	// * only resides in domain name wildcards, so it cannot coexit with : in annotation keys
+	cn = strings.ReplaceAll(cn, "*", "_")
 	if cnLen > 56 {
 		cnLen = 56
 	}
 	return cn[0:cnLen] + "-" + hex.EncodeToString(digest[0:])[0:6]
+}
+
+// get wildcard SAN for a given CN
+// e.g. *.example.com for k3s.example.com
+func getWildcardSAN(cn string) string {
+	if strings.Contains(cn, ".") {
+		return "*." + strings.SplitN(cn, ".", 2)[1]
+	}
+	return cn
+}
+
+// from https://github.com/golang/go/blob/master/src/crypto/x509/verify.go
+func validHostnamePattern(host string) bool { return validHostname(host, true) }
+
+// adapted from https://github.com/golang/go/blob/master/src/crypto/x509/verify.go
+// DIFFERENT WITH Go codebase: added support of IPv6 address (:)
+//
+// validHostname reports whether host is a valid hostname that can be matched or
+// matched against according to RFC 6125 2.2, with some leniency to accommodate
+// legacy values.
+func validHostname(host string, isPattern bool) bool {
+	if !isPattern {
+		host = strings.TrimSuffix(host, ".")
+	}
+	if len(host) == 0 {
+		return false
+	}
+
+	for i, part := range strings.Split(host, ".") {
+		if part == "" {
+			// Empty label.
+			return false
+		}
+		if isPattern && i == 0 && part == "*" {
+			// Only allow full left-most wildcards, as those are the only ones
+			// we match, and matching literal '*' characters is probably never
+			// the expected behavior.
+			continue
+		}
+		for j, c := range part {
+			if 'a' <= c && c <= 'z' {
+				continue
+			}
+			if '0' <= c && c <= '9' {
+				continue
+			}
+			if 'A' <= c && c <= 'Z' {
+				continue
+			}
+			if c == '-' && j != 0 {
+				continue
+			}
+			if c == '_' {
+				// Not a valid character in hostnames, but commonly
+				// found in deployments outside the WebPKI.
+				continue
+			}
+			if c == ':' {
+				// IPv6 support added in dynamiclistener
+				continue
+			}
+			return false
+		}
+	}
+
+	return true
 }
