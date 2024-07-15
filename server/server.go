@@ -38,6 +38,14 @@ type ListenOpts struct {
 	TLSListenerConfig dynamiclistener.Config
 }
 
+type LogrusAdapter struct {
+	Logger *logrus.Logger
+}
+
+func (la *LogrusAdapter) Write(buf []byte) (int, error) {
+	return la.Logger.Out.Write(buf)
+}
+
 func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
 	if opts == nil {
 		opts = &ListenOpts{}
@@ -48,7 +56,9 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 	}
 
 	logger := logrus.StandardLogger()
-	errorLog := log.New(logger.WriterLevel(logrus.DebugLevel), "", log.LstdFlags)
+	logger.SetLevel(logrus.DebugLevel)
+	adapter := &LogrusAdapter{Logger: logger}
+	errorLog := log.New(adapter, "", log.LstdFlags)
 
 	if httpsPort > 0 {
 		tlsTCPListener, err := dynamiclistener.NewTCPListener(opts.BindHost, httpsPort)
