@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/factory"
@@ -38,6 +39,14 @@ type ListenOpts struct {
 	TLSListenerConfig dynamiclistener.Config
 }
 
+type LogrusAdapter struct {
+	Logger *logrus.Logger
+}
+
+func (la *LogrusAdapter) Write(buf []byte) (int, error) {
+	return la.Logger.Out.Write(buf)
+}
+
 func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
 	if opts == nil {
 		opts = &ListenOpts{}
@@ -47,9 +56,15 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 		opts.TLSListenerConfig.TLSConfig = &tls.Config{}
 	}
 
+	logLevel := logrus.InfoLevel
+	// Use the same env-vars as webhook to log at the debug level
+	if os.Getenv("CATTLE_DEBUG") == "true" || os.Getenv("RANCHER_DEBUG") == "true" {
+		logLevel = logrus.DebugLevel
+	}
 	logger := logrus.StandardLogger()
-	errorLog := log.New(logger.WriterLevel(logrus.DebugLevel), "", log.LstdFlags)
-
+	logger.SetLevel(logLevel)
+	adapter := &LogrusAdapter{Logger: logger}
+	errorLog := log.New(adapter, "", log.LstdFlags)
 	if httpsPort > 0 {
 		tlsTCPListener, err := dynamiclistener.NewTCPListener(opts.BindHost, httpsPort)
 		if err != nil {
