@@ -44,16 +44,9 @@ type ListenOpts struct {
 }
 
 func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
-	writer := logrus.StandardLogger().WriterLevel(logrus.DebugLevel)
+	logger := logrus.StandardLogger()
+	writer := logger.WriterLevel(logrus.DebugLevel)
 	if opts.DisplayServerLogs {
-		// Create a new logger the writes to which are at the same level as it's
-		// configured at, with an "ERROR" prefix (as the server writes "un-levelled"
-		// text to the log stream it's handled).
-		// We aren't grabbing `logrus.StandardLogger()` because that gives a reference
-		// to the one global logger, and we don't want to change its logging level here.
-		logger := logrus.New()
-		logger.SetOutput(logrus.StandardLogger().Out)
-		logger.SetLevel(logrus.ErrorLevel)
 		writer = logger.WriterLevel(logrus.ErrorLevel)
 	}
 	// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
