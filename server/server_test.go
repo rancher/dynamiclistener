@@ -47,7 +47,8 @@ func TestHttpServerLogWithLogrus(t *testing.T) {
 	var buf bytes.Buffer
 	var mutex sync.Mutex
 	safeWriter := newSafeWriter(&buf, &mutex)
-	doRequest(t, safeWriter, message, logrus.ErrorLevel)
+	err := doRequest(safeWriter, message, logrus.ErrorLevel)
+	assert.Nil(err)
 
 	mutex.Lock()
 	s := buf.String()
@@ -64,7 +65,8 @@ func TestHttpNoServerLogsWithLogrus(t *testing.T) {
 	var buf bytes.Buffer
 	var mutex sync.Mutex
 	safeWriter := newSafeWriter(&buf, &mutex)
-	doRequest(t, safeWriter, message, logrus.DebugLevel)
+	err := doRequest(safeWriter, message, logrus.DebugLevel)
+	assert.Nil(err)
 
 	mutex.Lock()
 	s := buf.String()
@@ -74,15 +76,16 @@ func TestHttpNoServerLogsWithLogrus(t *testing.T) {
 	mutex.Unlock()
 }
 
-func doRequest(t *testing.T, safeWriter *safeWriter, message string, logLevel logrus.Level) {
-	assert := assertPkg.New(t)
+func doRequest(safeWriter *safeWriter, message string, logLevel logrus.Level) error {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	host := "127.0.0.1"
 	httpPort := 9012
 	httpsPort := 0
 	msg := fmt.Sprintf("panicking context: %s", message)
 	handler := alwaysPanicHandler{msg: msg}
 	listenOpts := &ListenOpts{
-		BindHost: "127.0.0.1",
+		BindHost: host,
 	}
 
 	logger := logrus.StandardLogger()
@@ -91,26 +94,30 @@ func doRequest(t *testing.T, safeWriter *safeWriter, message string, logLevel lo
 	writer := logger.WriterLevel(logLevel)
 	errorLog := log.New(writer, "", log.LstdFlags)
 
-	err := listenAndServeWithLogger(ctx, httpsPort, httpPort, &handler, listenOpts, errorLog)
-	assert.Nil(err)
-
-	makeTheHttpRequest(assert, httpPort)
-	cancel()
+	if err := listenAndServeWithLogger(ctx, httpsPort, httpPort, &handler, listenOpts, errorLog); err != nil {
+		return err
+	}
+	addr := fmt.Sprintf("%s:%d", host, httpPort)
+	return makeTheHttpRequest(addr)
 }
 
-func makeTheHttpRequest(assert *assertPkg.Assertions, port int) {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+func makeTheHttpRequest(addr string) error {
 	url := fmt.Sprintf("%s://%s/", "http", addr)
 
 	waitTime := 10 * time.Millisecond
+	totalTime := 0 * time.Millisecond
+	const maxWaitTime = 10 * time.Second
+	// Waiting for server to be ready..., max of maxWaitTime
 	for {
 		conn, err := net.Dial("tcp", addr)
 		if err == nil {
 			conn.Close()
 			break
+		} else if totalTime > maxWaitTime {
+			return fmt.Errorf("timed out waiting for the server to start after %d msec", totalTime/1e6)
 		}
-		fmt.Println("Waiting for server to be ready...")
 		time.Sleep(waitTime)
+		totalTime += waitTime
 		waitTime += 10 * time.Millisecond
 	}
 
@@ -119,13 +126,14 @@ func makeTheHttpRequest(assert *assertPkg.Assertions, port int) {
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return
+		return fmt.Errorf("error creating request: %w", err)
 	}
 	resp, err := client.Do(req)
-	assert.Error(err, "server should have panicked on request")
+	if err == nil {
+		return fmt.Errorf("server should have panicked on request")
+	}
 	if resp != nil {
 		defer resp.Body.Close()
-		fmt.Println("Response status:", resp.Status)
 	}
+	return nil
 }
