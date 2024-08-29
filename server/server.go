@@ -5,7 +5,6 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -87,7 +86,7 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 		go func() {
 			logrus.Infof("Listening on %s:%d", opts.BindHost, httpsPort)
 			err := tlsServer.Serve(tlsTCPListener)
-			if !errors.Is(err, http.ErrServerClosed) && err != nil {
+			if err != http.ErrServerClosed && err != nil {
 				logrus.Fatalf("https server failed: %v", err)
 			}
 		}()
@@ -109,7 +108,7 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 		go func() {
 			logrus.Infof("Listening on %s:%d", opts.BindHost, httpPort)
 			err := httpServer.ListenAndServe()
-			if !errors.Is(err, http.ErrServerClosed) && err != nil {
+			if err != http.ErrServerClosed && err != nil {
 				logrus.Fatalf("http server failed: %v", err)
 			}
 		}()
