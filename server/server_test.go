@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -86,15 +85,11 @@ func doRequest(safeWriter *safeWriter, message string, logLevel logrus.Level) er
 	handler := alwaysPanicHandler{msg: msg}
 	listenOpts := &ListenOpts{
 		BindHost: host,
+		DisplayServerLogs: logLevel == logrus.ErrorLevel,
 	}
 
-	logger := logrus.StandardLogger()
-	logger.SetOutput(safeWriter)
-	logger.SetLevel(logrus.ErrorLevel)
-	writer := logger.WriterLevel(logLevel)
-	errorLog := log.New(writer, "", log.LstdFlags)
-
-	if err := listenAndServeWithLogger(ctx, httpsPort, httpPort, &handler, listenOpts, errorLog); err != nil {
+	logrus.StandardLogger().SetOutput(safeWriter)
+	if err := ListenAndServe(ctx, httpsPort, httpPort, &handler, listenOpts); err != nil {
 		return err
 	}
 	addr := fmt.Sprintf("%s:%d", host, httpPort)

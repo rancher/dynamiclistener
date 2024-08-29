@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -46,18 +47,15 @@ type ListenOpts struct {
 func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
 	logger := logrus.StandardLogger()
 	writer := logger.WriterLevel(logrus.DebugLevel)
+	if opts == nil {
+		opts = &ListenOpts{}
+	}
 	if opts.DisplayServerLogs {
 		writer = logger.WriterLevel(logrus.ErrorLevel)
 	}
 	// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
-	errorLog := log.New(writer, "", log.LstdFlags)
-	return listenAndServeWithLogger(ctx, httpsPort, httpPort, handler, opts, errorLog)
-}
 
-func listenAndServeWithLogger(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts, errorLog *log.Logger) error {
-	if opts == nil {
-		opts = &ListenOpts{}
-	}
+	errorLog := log.New(writer, "", log.LstdFlags)
 
 	if opts.TLSListenerConfig.TLSConfig == nil {
 		opts.TLSListenerConfig.TLSConfig = &tls.Config{}
@@ -89,7 +87,7 @@ func listenAndServeWithLogger(ctx context.Context, httpsPort, httpPort int, hand
 		go func() {
 			logrus.Infof("Listening on %s:%d", opts.BindHost, httpsPort)
 			err := tlsServer.Serve(tlsTCPListener)
-			if err != http.ErrServerClosed && err != nil {
+			if !errors.Is(err, http.ErrServerClosed) && err != nil {
 				logrus.Fatalf("https server failed: %v", err)
 			}
 		}()
@@ -111,7 +109,7 @@ func listenAndServeWithLogger(ctx context.Context, httpsPort, httpPort int, hand
 		go func() {
 			logrus.Infof("Listening on %s:%d", opts.BindHost, httpPort)
 			err := httpServer.ListenAndServe()
-			if err != http.ErrServerClosed && err != nil {
+			if !errors.Is(err, http.ErrServerClosed) && err != nil {
 				logrus.Fatalf("http server failed: %v", err)
 			}
 		}()
