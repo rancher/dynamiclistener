@@ -16,6 +16,8 @@ jobs:
 
       - name: Create release on Github
         run: |
-          gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if [[ "${{ github.ref_name }}" == *-rc* ]]; then
+            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes --prerelease
+          else
+            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
+          fi
