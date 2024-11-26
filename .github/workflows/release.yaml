@@ -21,3 +21,5 @@ jobs:
           else
             gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
