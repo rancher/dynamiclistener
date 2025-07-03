@@ -34,12 +34,18 @@ type SetFactory interface {
 	SetFactory(tls TLSFactory)
 }
 
+type ListenerWrapper struct {
+	TlsListener net.Listener
+	Handler     http.Handler
+	Listener    *listener
+}
+
 // Deprecated: Use NewListenerWithChain instead as it supports intermediate CAs
-func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, caKey crypto.Signer, config Config) (net.Listener, http.Handler, error) {
+func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, caKey crypto.Signer, config Config) (*ListenerWrapper, error) {
 	return NewListenerWithChain(l, storage, []*x509.Certificate{caCert}, caKey, config)
 }
 
-func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Certificate, caKey crypto.Signer, config Config) (net.Listener, http.Handler, error) {
+func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Certificate, caKey crypto.Signer, config Config) (*ListenerWrapper, error) {
 	if config.CN == "" {
 		config.CN = "dynamic"
 	}
@@ -86,14 +92,19 @@ func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Cer
 	}
 
 	if config.RegenerateCerts != nil && config.RegenerateCerts() {
-		if err := dynamicListener.regenerateCerts(); err != nil {
-			return nil, nil, err
+		if err := dynamicListener.RegenerateCerts(); err != nil {
+			return nil, err
 		}
 	}
 
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
 
-	return tlsListener, dynamicListener.cacheHandler(), nil
+	return &ListenerWrapper{
+		TlsListener: tlsListener,
+		Handler:     dynamicListener.cacheHandler(),
+		Listener:    dynamicListener,
+	}, nil
+
 }
 
 func allowDefaultSANs(sans []string, next func(...string) []string) func(...string) []string {
@@ -202,9 +213,9 @@ func (l *listener) WrapExpiration(days int) net.Listener {
 	}
 }
 
-// regenerateCerts regenerates the used certificates and
+// RegenerateCerts regenerates the used certificates and
 // updates the secret.
-func (l *listener) regenerateCerts() error {
+func (l *listener) RegenerateCerts() error {
 	l.Lock()
 	defer l.Unlock()
 
