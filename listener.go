@@ -91,12 +91,6 @@ func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Cer
 		setter.SetFactory(dynamicListener.factory)
 	}
 
-	if config.RegenerateCerts != nil && config.RegenerateCerts() {
-		if err := dynamicListener.RegenerateCerts(); err != nil {
-			return nil, err
-		}
-	}
-
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
 
 	return &Listener{
@@ -154,7 +148,6 @@ type Config struct {
 	MaxSANs               int
 	ExpirationDaysCheck   int
 	CloseConnOnCertChange bool
-	RegenerateCerts       func() bool
 	FilterCN              func(...string) []string
 }
 
