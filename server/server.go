@@ -149,7 +149,7 @@ func getTLSListener(ctx context.Context, tcp net.Listener, handler http.Handler,
 		return nil, nil, err
 	}
 
-	return listener.TlsListener, wrapHandler(listener.Handler, handler), nil
+	return listener.TLSListener, wrapHandler(listener.Handler, handler), nil
 }
 
 func getCA(opts ListenOpts) ([]*x509.Certificate, crypto.Signer, error) {

@@ -35,7 +35,7 @@ type SetFactory interface {
 }
 
 type Listener struct {
-	TlsListener net.Listener
+	TLSListener net.Listener
 	Handler     http.Handler
 	Listener    *listener
 }
@@ -100,7 +100,7 @@ func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Cer
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
 
 	return &Listener{
-		TlsListener: tlsListener,
+		TLSListener: tlsListener,
 		Handler:     dynamicListener.cacheHandler(),
 		Listener:    dynamicListener,
 	}, nil
