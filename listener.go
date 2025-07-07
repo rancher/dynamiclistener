@@ -34,18 +34,18 @@ type SetFactory interface {
 	SetFactory(tls TLSFactory)
 }
 
-type ListenerWrapper struct {
+type Listener struct {
 	TlsListener net.Listener
 	Handler     http.Handler
 	Listener    *listener
 }
 
 // Deprecated: Use NewListenerWithChain instead as it supports intermediate CAs
-func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, caKey crypto.Signer, config Config) (*ListenerWrapper, error) {
+func NewListener(l net.Listener, storage TLSStorage, caCert *x509.Certificate, caKey crypto.Signer, config Config) (*Listener, error) {
 	return NewListenerWithChain(l, storage, []*x509.Certificate{caCert}, caKey, config)
 }
 
-func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Certificate, caKey crypto.Signer, config Config) (*ListenerWrapper, error) {
+func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Certificate, caKey crypto.Signer, config Config) (*Listener, error) {
 	if config.CN == "" {
 		config.CN = "dynamic"
 	}
@@ -99,7 +99,7 @@ func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Cer
 
 	tlsListener := tls.NewListener(dynamicListener.WrapExpiration(config.ExpirationDaysCheck), dynamicListener.tlsConfig)
 
-	return &ListenerWrapper{
+	return &Listener{
 		TlsListener: tlsListener,
 		Handler:     dynamicListener.cacheHandler(),
 		Listener:    dynamicListener,
