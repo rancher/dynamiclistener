@@ -74,6 +74,21 @@ func NewPrivateKey() (*rsa.PrivateKey, error) {
 // NewSelfSignedCACert creates a CA certificate
 func NewSelfSignedCACert(cfg Config, key crypto.Signer) (*x509.Certificate, error) {
 	now := time.Now()
+	if len(cfg.CommonName) == 0 {
+		return nil, errors.New("must specify a CommonName")
+	}
+	if len(cfg.Usages) == 0 {
+		return nil, errors.New("must specify at least one ExtKeyUsage")
+	}
+	expiresAt := duration365d * 10
+	envExpirationYears := os.Getenv("CATTLE_NEW_SIGNED_CA_EXPIRATION_YEARS")
+	if envExpirationYears != "" {
+		if envExpirationYearsInt, err := strconv.Atoi(envExpirationYears); err != nil {
+			logrus.Infof("[NewSelfSignedCACert] expiration years from ENV (%s) could not be converted to int (falling back to default value: %d)", envExpirationYears, expiresAt)
+		} else {
+			expiresAt = time.Hour * 24 * 365 * time.Duration(envExpirationYearsInt)
+		}
+	}
 	tmpl := x509.Certificate{
 		SerialNumber: new(big.Int).SetInt64(0),
 		Subject: pkix.Name{
@@ -81,7 +96,7 @@ func NewSelfSignedCACert(cfg Config, key crypto.Signer) (*x509.Certificate, erro
 			Organization: cfg.Organization,
 		},
 		NotBefore:             now.UTC(),
-		NotAfter:              now.Add(duration365d * 10).UTC(),
+		NotAfter:              now.Add(expiresAt).UTC(),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
