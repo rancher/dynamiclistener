@@ -74,12 +74,6 @@ func NewPrivateKey() (*rsa.PrivateKey, error) {
 // NewSelfSignedCACert creates a CA certificate
 func NewSelfSignedCACert(cfg Config, key crypto.Signer) (*x509.Certificate, error) {
 	now := time.Now()
-	if len(cfg.CommonName) == 0 {
-		return nil, errors.New("must specify a CommonName")
-	}
-	if len(cfg.Usages) == 0 {
-		return nil, errors.New("must specify at least one ExtKeyUsage")
-	}
 	expiresAt := duration365d * 10
 	envExpirationYears := os.Getenv("CATTLE_NEW_SIGNED_CA_EXPIRATION_YEARS")
 	if envExpirationYears != "" {
