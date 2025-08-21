@@ -40,7 +40,8 @@ type ListenOpts struct {
 	// Override legacy behavior where server logs written to the application's logrus object
 	// were dropped unless logrus was set to debug-level (such as by launching steve with '--debug').
 	// Setting this to true results in server logs appearing at an ERROR level.
-	DisplayServerLogs bool
+	DisplayServerLogs       bool
+	IgnoreTLSHandshakeError bool
 }
 
 func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
@@ -51,6 +52,10 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 	}
 	if opts.DisplayServerLogs {
 		writer = logger.WriterLevel(logrus.ErrorLevel)
+	}
+	if opts.IgnoreTLSHandshakeError {
+		writer = logger.WriterLevel(logrus.DebugLevel)
+		//logrus.SetLevel(logrus.DebugLevel)
 	}
 	// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
 
