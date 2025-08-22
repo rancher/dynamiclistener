@@ -55,7 +55,6 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 	}
 	if opts.IgnoreTLSHandshakeError {
 		writer = logger.WriterLevel(logrus.DebugLevel)
-		//logrus.SetLevel(logrus.DebugLevel)
 	}
 	// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
 
