@@ -46,8 +46,8 @@ type ListenOpts struct {
 	IgnoreTLSHandshakeError bool
 }
 type tlsHandshakeErrorWriter struct {
-	writer      io.Writer
-	debugWriter io.Writer
+	defaultWriter io.Writer
+	debugWriter   io.Writer
 }
 
 const (
@@ -65,10 +65,11 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 	}
 
 	var errorLog *log.Logger
+
 	if opts.IgnoreTLSHandshakeError {
 		debugWriter := &tlsHandshakeErrorWriter{
-			writer:      logrus.StandardLogger().WriterLevel(logrus.ErrorLevel),
-			debugWriter: logrus.StandardLogger().WriterLevel(logrus.DebugLevel),
+			defaultWriter: writer,
+			debugWriter:   logrus.StandardLogger().WriterLevel(logrus.DebugLevel),
 		}
 		errorLog = log.New(debugWriter, "", log.LstdFlags)
 	} else {
@@ -266,5 +267,5 @@ func (w *tlsHandshakeErrorWriter) Write(p []byte) (n int, err error) {
 	if strings.Contains(message, tlsHandshakeErrorPrefix) {
 		return w.debugWriter.Write(p)
 	}
-	return w.writer.Write(p)
+	return w.defaultWriter.Write(p)
 }
