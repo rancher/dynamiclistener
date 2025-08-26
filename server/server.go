@@ -6,9 +6,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/factory"
@@ -43,6 +45,14 @@ type ListenOpts struct {
 	DisplayServerLogs       bool
 	IgnoreTLSHandshakeError bool
 }
+type tlsHandshakeErrorWriter struct {
+	writer      io.Writer
+	debugWriter io.Writer
+}
+
+const (
+	tlsHandshakeErrorPrefix = "http: TLS handshake error"
+)
 
 func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.Handler, opts *ListenOpts) error {
 	logger := logrus.StandardLogger()
@@ -53,12 +63,18 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 	if opts.DisplayServerLogs {
 		writer = logger.WriterLevel(logrus.ErrorLevel)
 	}
-	if opts.IgnoreTLSHandshakeError {
-		writer = logger.WriterLevel(logrus.DebugLevel)
-	}
-	// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
 
-	errorLog := log.New(writer, "", log.LstdFlags)
+	var errorLog *log.Logger
+	if opts.IgnoreTLSHandshakeError {
+		debugWriter := &tlsHandshakeErrorWriter{
+			writer:      logrus.StandardLogger().WriterLevel(logrus.ErrorLevel),
+			debugWriter: logrus.StandardLogger().WriterLevel(logrus.DebugLevel),
+		}
+		errorLog = log.New(debugWriter, "", log.LstdFlags)
+	} else {
+		// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
+		errorLog = log.New(writer, "", log.LstdFlags)
+	}
 
 	if opts.TLSListenerConfig.TLSConfig == nil {
 		opts.TLSListenerConfig.TLSConfig = &tls.Config{}
@@ -243,4 +259,12 @@ func acmeListener(tcp net.Listener, handler http.Handler, opts ListenOpts) (net.
 	}
 
 	return tls.NewListener(tcp, opts.TLSListenerConfig.TLSConfig), manager.HTTPHandler(handler), nil
+}
+
+func (w *tlsHandshakeErrorWriter) Write(p []byte) (n int, err error) {
+	message := string(p)
+	if strings.Contains(message, tlsHandshakeErrorPrefix) {
+		return w.debugWriter.Write(p)
+	}
+	return w.writer.Write(p)
 }
