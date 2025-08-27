@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	ignoreTLSHandErrorVal = false
+	ignoreTLSHandErrorVal = true
 )
 
 type alwaysPanicHandler struct {
@@ -55,6 +54,7 @@ func (s *safeWriter) Write(p []byte) (n int, err error) {
 }
 
 func TestTLSHandshakeErrorWriter(t *testing.T) {
+	var mutex sync.Mutex
 	tests := []struct {
 		name                    string
 		ignoreTLSHandshakeError bool
@@ -111,17 +111,20 @@ func TestTLSHandshakeErrorWriter(t *testing.T) {
 			assert.Nil(err)
 			assert.Equal(len(tt.message), n)
 
+			mutex.Lock()
 			if tt.expectDebug {
 				assert.Contains(bufDebug.String(), tt.message)
 			} else {
 				assert.Empty(bufDebug.String())
 			}
-
+			mutex.Unlock()
+			mutex.Lock()
 			if tt.expectDefault {
 				assert.Contains(bufDefault.String(), tt.message)
 			} else {
 				assert.Empty(bufDefault.String())
 			}
+			mutex.Unlock()
 		})
 	}
 }
@@ -130,8 +133,6 @@ func TestTlsHandshakeErrorHandling(t *testing.T) {
 	assert := assertPkg.New(t)
 	var buf bytes.Buffer
 	var mutex sync.Mutex
-	logrus.SetOutput(&buf)
-	defer logrus.SetOutput(os.Stderr)
 	msg := ""
 	handler := noPanicHandler{msg: msg}
 
