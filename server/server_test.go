@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -16,8 +18,7 @@ import (
 )
 
 const (
-	ignoreTLSHandErrorVal   = false
-	stringTLSHandshakeError = "http: TLS handshake error"
+	ignoreTLSHandErrorVal = false
 )
 
 type alwaysPanicHandler struct {
@@ -26,6 +27,14 @@ type alwaysPanicHandler struct {
 
 func (z *alwaysPanicHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {
 	panic(z.msg)
+}
+
+type noPanicHandler struct {
+	msg string
+}
+
+func (z *noPanicHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {
+	fmt.Printf("%s", z.msg)
 }
 
 // safeWriter is used to allow writing to a buffer-based log in a web server
@@ -45,10 +54,86 @@ func (s *safeWriter) Write(p []byte) (n int, err error) {
 	return s.writer.Write(p)
 }
 
+func TestTLSHandshakeErrorWriter(t *testing.T) {
+	tests := []struct {
+		name                    string
+		ignoreTLSHandshakeError bool
+		message                 string
+		expectDebug             bool
+		expectDefault           bool
+	}{
+		{
+			name:                    "TLS handshake error goes to debug when ignored",
+			ignoreTLSHandshakeError: true,
+			message:                 "http: TLS handshake error: simulated",
+			expectDebug:             true,
+			expectDefault:           false,
+		},
+		{
+			name:                    "TLS handshake error goes to default when not ignored",
+			ignoreTLSHandshakeError: false,
+			message:                 "http: TLS handshake error: simulated",
+			expectDebug:             false,
+			expectDefault:           true,
+		},
+		{
+			name:                    "other messages always go to default",
+			ignoreTLSHandshakeError: true,
+			message:                 "some other error",
+			expectDebug:             false,
+			expectDefault:           true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert := assertPkg.New(t)
+
+			var bufDebug, bufDefault bytes.Buffer
+
+			var debugWriter io.Writer
+			var defaultWriter io.Writer
+
+			if tt.ignoreTLSHandshakeError {
+				debugWriter = &bufDebug
+				defaultWriter = &bufDefault
+			} else {
+				debugWriter = &bufDefault
+				defaultWriter = &bufDefault
+			}
+
+			writer := &tlsHandshakeErrorWriter{
+				defaultWriter: defaultWriter,
+				debugWriter:   debugWriter,
+			}
+
+			n, err := writer.Write([]byte(tt.message))
+			assert.Nil(err)
+			assert.Equal(len(tt.message), n)
+
+			if tt.expectDebug {
+				assert.Contains(bufDebug.String(), tt.message)
+			} else {
+				assert.Empty(bufDebug.String())
+			}
+
+			if tt.expectDefault {
+				assert.Contains(bufDefault.String(), tt.message)
+			} else {
+				assert.Empty(bufDefault.String())
+			}
+		})
+	}
+}
+
 func TestTlsHandshakeErrorHandling(t *testing.T) {
 	assert := assertPkg.New(t)
 	var buf bytes.Buffer
 	var mutex sync.Mutex
+	logrus.SetOutput(&buf)
+	defer logrus.SetOutput(os.Stderr)
+	msg := ""
+	handler := noPanicHandler{msg: msg}
 
 	listenOpts := &ListenOpts{
 		BindHost:                "127.0.0.1",
@@ -57,7 +142,7 @@ func TestTlsHandshakeErrorHandling(t *testing.T) {
 	}
 
 	go func() {
-		err := ListenAndServe(context.Background(), 9013, 0, &alwaysPanicHandler{}, listenOpts)
+		err := ListenAndServe(context.Background(), 9013, 0, &handler, listenOpts)
 		assert.Nil(err)
 	}()
 
@@ -74,9 +159,7 @@ func TestTlsHandshakeErrorHandling(t *testing.T) {
 
 	client := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			TLSClientConfig: &tls.Config{},
 		},
 		Timeout: 5 * time.Second,
 	}
@@ -91,14 +174,7 @@ func TestTlsHandshakeErrorHandling(t *testing.T) {
 	mutex.Unlock()
 
 	if s != "" {
-		assert.Contains(s, stringTLSHandshakeError)
-
-		if ignoreTLSHandErrorVal {
-			assert.Regexp(
-				"level=debug msg=\"[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} http: TLS handshake error from [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+: EOF\"",
-				s,
-			)
-		} else {
+		if !ignoreTLSHandErrorVal {
 			assert.Regexp(
 				"level=error msg=\"[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} http: TLS handshake error from [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+: EOF\"",
 				s,
