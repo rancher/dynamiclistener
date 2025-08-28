@@ -15,24 +15,12 @@ import (
 	assertPkg "github.com/stretchr/testify/assert"
 )
 
-const (
-	ignoreTLSHandErrorVal = true
-)
-
 type alwaysPanicHandler struct {
 	msg string
 }
 
 func (z *alwaysPanicHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {
 	panic(z.msg)
-}
-
-type noPanicHandler struct {
-	msg string
-}
-
-func (z *noPanicHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {
-	fmt.Printf("%s", z.msg)
 }
 
 // safeWriter is used to allow writing to a buffer-based log in a web server
