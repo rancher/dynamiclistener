@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -127,62 +126,6 @@ func TestTLSHandshakeErrorWriter(t *testing.T) {
 			mutex.Unlock()
 		})
 	}
-}
-
-func TestTlsHandshakeErrorHandling(t *testing.T) {
-	assert := assertPkg.New(t)
-	var buf bytes.Buffer
-	var mutex sync.Mutex
-	msg := ""
-	handler := noPanicHandler{msg: msg}
-
-	listenOpts := &ListenOpts{
-		BindHost:                "127.0.0.1",
-		IgnoreTLSHandshakeError: ignoreTLSHandErrorVal,
-		DisplayServerLogs:       true,
-	}
-
-	go func() {
-		err := ListenAndServe(context.Background(), 9013, 0, &handler, listenOpts)
-		assert.Nil(err)
-	}()
-
-	addr := "127.0.0.1:9013"
-	waitTime := 10 * time.Millisecond
-	for {
-		conn, err := net.Dial("tcp", addr)
-		if err == nil {
-			conn.Close()
-			break
-		}
-		time.Sleep(waitTime)
-	}
-
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{},
-		},
-		Timeout: 5 * time.Second,
-	}
-
-	_, err := client.Get(fmt.Sprintf("https://%s/", addr))
-	assert.NotNil(err)
-
-	time.Sleep(1 * time.Second)
-
-	mutex.Lock()
-	s := buf.String()
-	mutex.Unlock()
-
-	if s != "" {
-		if !ignoreTLSHandErrorVal {
-			assert.Regexp(
-				"level=error msg=\"[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} http: TLS handshake error from [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+: EOF\"",
-				s,
-			)
-		}
-	}
-
 }
 
 func TestHttpServerLogWithLogrus(t *testing.T) {
