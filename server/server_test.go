@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -41,34 +40,21 @@ func (s *safeWriter) Write(p []byte) (n int, err error) {
 }
 
 func TestTLSHandshakeErrorWriter(t *testing.T) {
-	var mutex sync.Mutex
 	tests := []struct {
 		name                    string
 		ignoreTLSHandshakeError bool
-		message                 string
-		expectDebug             bool
-		expectDefault           bool
+		message                 []byte
+		expectedLevel           logrus.Level
 	}{
 		{
-			name:                    "TLS handshake error goes to debug when ignored",
-			ignoreTLSHandshakeError: true,
-			message:                 "http: TLS handshake error: simulated",
-			expectDebug:             true,
-			expectDefault:           false,
+			name:          "TLS handshake error is logged as debug",
+			message:       []byte("http: TLS handshake error: EOF"),
+			expectedLevel: logrus.DebugLevel,
 		},
 		{
-			name:                    "TLS handshake error goes to default when not ignored",
-			ignoreTLSHandshakeError: false,
-			message:                 "http: TLS handshake error: simulated",
-			expectDebug:             false,
-			expectDefault:           true,
-		},
-		{
-			name:                    "other messages always go to default",
-			ignoreTLSHandshakeError: true,
-			message:                 "some other error",
-			expectDebug:             false,
-			expectDefault:           true,
+			name:          "other errors are logged as error",
+			message:       []byte("some other server error"),
+			expectedLevel: logrus.ErrorLevel,
 		},
 	}
 
@@ -76,42 +62,19 @@ func TestTLSHandshakeErrorWriter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert := assertPkg.New(t)
 
-			var bufDebug, bufDefault bytes.Buffer
+			var buf bytes.Buffer
+			logrus.SetOutput(&buf)
+			logrus.SetLevel(logrus.DebugLevel)
 
-			var debugWriter io.Writer
-			var defaultWriter io.Writer
+			debugger := &TLSErrorDebugger{}
+			n, err := debugger.Write(tt.message)
 
-			if tt.ignoreTLSHandshakeError {
-				debugWriter = &bufDebug
-				defaultWriter = &bufDefault
-			} else {
-				debugWriter = &bufDefault
-				defaultWriter = &bufDefault
-			}
-
-			writer := &tlsHandshakeErrorWriter{
-				defaultWriter: defaultWriter,
-				debugWriter:   debugWriter,
-			}
-
-			n, err := writer.Write([]byte(tt.message))
 			assert.Nil(err)
 			assert.Equal(len(tt.message), n)
 
-			mutex.Lock()
-			if tt.expectDebug {
-				assert.Contains(bufDebug.String(), tt.message)
-			} else {
-				assert.Empty(bufDebug.String())
-			}
-			mutex.Unlock()
-			mutex.Lock()
-			if tt.expectDefault {
-				assert.Contains(bufDefault.String(), tt.message)
-			} else {
-				assert.Empty(bufDefault.String())
-			}
-			mutex.Unlock()
+			logOutput := buf.String()
+			assert.Contains(logOutput, "level="+tt.expectedLevel.String())
+			assert.Contains(logOutput, string(tt.message))
 		})
 	}
 }
