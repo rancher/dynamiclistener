@@ -57,7 +57,7 @@ func TestTLSHandshakeErrorWriter(t *testing.T) {
 			expectedLevel: logrus.ErrorLevel,
 		},
 	}
-
+	var baseLogLevel = logrus.GetLevel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert := assertPkg.New(t)
@@ -77,6 +77,7 @@ func TestTLSHandshakeErrorWriter(t *testing.T) {
 			assert.Contains(logOutput, string(tt.message))
 		})
 	}
+	logrus.SetLevel(baseLogLevel)
 }
 
 func TestHttpServerLogWithLogrus(t *testing.T) {
