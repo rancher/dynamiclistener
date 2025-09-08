@@ -54,7 +54,7 @@ type TLSErrorDebugger struct{}
 
 func (t *TLSErrorDebugger) Write(p []byte) (n int, err error) {
 	p = bytes.TrimSpace(p)
-	if bytes.Contains(p, TLSHandshakeError) {
+	if bytes.HasPrefix(p, TLSHandshakeError) {
 		logrus.Debug(string(p))
 	} else {
 		logrus.Error(string(p))
@@ -75,10 +75,10 @@ func ListenAndServe(ctx context.Context, httpsPort, httpPort int, handler http.H
 	var errorLog *log.Logger
 	if opts.IgnoreTLSHandshakeError {
 		debugWriter := &TLSErrorDebugger{}
-		errorLog = log.New(debugWriter, "", log.LstdFlags)
+		errorLog = log.New(debugWriter, "", 0)
 	} else {
 		// Otherwise preserve legacy behaviour of displaying server logs only in debug mode.
-		errorLog = log.New(writer, "", log.LstdFlags)
+		errorLog = log.New(writer, "", 0)
 	}
 
 	if opts.TLSListenerConfig.TLSConfig == nil {
