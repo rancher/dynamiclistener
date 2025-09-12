@@ -212,7 +212,7 @@ func (s *storage) saveInK8s(secret *v1.Secret) (*v1.Secret, error) {
 
 	// ensure that the merged secret actually contains data before overwriting the existing fields
 	if !cert.IsValidTLSSecret(secret) {
-		logrus.Warnf("Skipping save of TLS secret for %s/%s due to missing certificate data", secret.Namespace, secret.Name)
+		logrus.Warnf("Skipping save of TLS secret for %s/%s due to missing certificate data", s.namespace, s.name)
 		return targetSecret, nil
 	}
 
