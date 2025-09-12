@@ -39,6 +39,47 @@ func (s *safeWriter) Write(p []byte) (n int, err error) {
 	return s.writer.Write(p)
 }
 
+func TestTLSHandshakeErrorWriter(t *testing.T) {
+	tests := []struct {
+		name                    string
+		ignoreTLSHandshakeError bool
+		message                 []byte
+		expectedLevel           logrus.Level
+	}{
+		{
+			name:          "TLS handshake error is logged as debug",
+			message:       []byte("http: TLS handshake error: EOF"),
+			expectedLevel: logrus.DebugLevel,
+		},
+		{
+			name:          "other errors are logged as error",
+			message:       []byte("some other server error"),
+			expectedLevel: logrus.ErrorLevel,
+		},
+	}
+	var baseLogLevel = logrus.GetLevel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert := assertPkg.New(t)
+
+			var buf bytes.Buffer
+			logrus.SetOutput(&buf)
+			logrus.SetLevel(logrus.DebugLevel)
+
+			debugger := &TLSErrorDebugger{}
+			n, err := debugger.Write(tt.message)
+
+			assert.Nil(err)
+			assert.Equal(len(tt.message), n)
+
+			logOutput := buf.String()
+			assert.Contains(logOutput, "level="+tt.expectedLevel.String())
+			assert.Contains(logOutput, string(tt.message))
+		})
+	}
+	logrus.SetLevel(baseLogLevel)
+}
+
 func TestHttpServerLogWithLogrus(t *testing.T) {
 	assert := assertPkg.New(t)
 	message := "debug-level writer"
@@ -84,7 +125,7 @@ func doRequest(safeWriter *safeWriter, message string, logLevel logrus.Level) er
 	msg := fmt.Sprintf("panicking context: %s", message)
 	handler := alwaysPanicHandler{msg: msg}
 	listenOpts := &ListenOpts{
-		BindHost: host,
+		BindHost:          host,
 		DisplayServerLogs: logLevel == logrus.ErrorLevel,
 	}
 
