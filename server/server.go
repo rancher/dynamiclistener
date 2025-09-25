@@ -169,12 +169,12 @@ func getTLSListener(ctx context.Context, tcp net.Listener, handler http.Handler,
 		return nil, nil, err
 	}
 
-	listener, dynHandler, err := dynamiclistener.NewListenerWithChain(tcp, storage, caCert, caKey, opts.TLSListenerConfig)
+	listener, err := dynamiclistener.NewListenerWithChain(tcp, storage, caCert, caKey, opts.TLSListenerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return listener, wrapHandler(dynHandler, handler), nil
+	return listener.TLSListener, wrapHandler(listener.Handler, handler), nil
 }
 
 func getCA(opts ListenOpts) ([]*x509.Certificate, crypto.Signer, error) {
