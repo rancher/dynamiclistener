@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	github.com/rancher/wrangler v1.1.2
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.37.0
 	k8s.io/api v0.27.4
