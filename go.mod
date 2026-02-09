@@ -2,7 +2,7 @@ module github.com/rancher/dynamiclistener
 
 go 1.23.0
 
-toolchain go1.24.2
+toolchain go1.25.7
 
 require (
 	github.com/rancher/wrangler v1.1.2
