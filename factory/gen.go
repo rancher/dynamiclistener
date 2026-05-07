@@ -348,11 +348,12 @@ func NewPrivateKey() (crypto.Signer, error) {
 func getAnnotationKey(cn string) string {
 	cn = cnPrefix + cn
 	cnLen := len(cn)
-	if cnLen < 64 && !strings.ContainsRune(cn, ':') {
+	if cnLen < 64 && !strings.ContainsRune(cn, ':') && !strings.ContainsRune(cn, '*') {
 		return cn
 	}
 	digest := sha256.Sum256([]byte(cn))
 	cn = strings.ReplaceAll(cn, ":", "_")
+	cn = strings.ReplaceAll(cn, "*", "_")
 	if cnLen > 56 {
 		cnLen = 56
 	}
