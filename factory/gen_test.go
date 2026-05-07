@@ -1,10 +1,12 @@
 package factory
 
 import (
+	"crypto/x509"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/rancher/dynamiclistener/cert"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -192,4 +194,129 @@ func TestNeedsUpdate_WildcardCountsAsOneSAN(t *testing.T) {
 			t.Error("NeedsUpdate should be false: MaxSANs reached")
 		}
 	})
+}
+
+func newTestTLS(t *testing.T) *TLS {
+	t.Helper()
+	caKey, err := NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	caCert, err := NewSelfSignedCACert(caKey, "test-ca", "test-org")
+	if err != nil {
+		t.Fatalf("NewSelfSignedCACert: %v", err)
+	}
+	return &TLS{
+		CACert:       []*x509.Certificate{caCert},
+		CAKey:        caKey,
+		CN:           "test-cn",
+		Organization: []string{"test-org"},
+	}
+}
+
+func assertCertHasDNSName(t *testing.T, secret *v1.Secret, name string) {
+	t.Helper()
+	certs, err := cert.ParseCertsPEM(secret.Data[v1.TLSCertKey])
+	if err != nil {
+		t.Fatalf("ParseCertsPEM: %v", err)
+	}
+	if len(certs) == 0 {
+		t.Fatal("no certs in secret")
+	}
+	for _, n := range certs[0].DNSNames {
+		if n == name {
+			return
+		}
+	}
+	t.Errorf("cert DNSNames %v does not contain %q", certs[0].DNSNames, name)
+}
+
+func assertCertDoesNotHaveDNSName(t *testing.T, secret *v1.Secret, name string) {
+	t.Helper()
+	certs, err := cert.ParseCertsPEM(secret.Data[v1.TLSCertKey])
+	if err != nil {
+		t.Fatalf("ParseCertsPEM: %v", err)
+	}
+	if len(certs) == 0 {
+		t.Fatal("no certs in secret")
+	}
+	for _, n := range certs[0].DNSNames {
+		if n == name {
+			t.Errorf("cert DNSNames %v unexpectedly contains %q", certs[0].DNSNames, name)
+			return
+		}
+	}
+}
+
+func TestGenerateCert_WildcardSAN(t *testing.T) {
+	tlsFactory := newTestTLS(t)
+	secret, _, err := tlsFactory.AddCN(nil, "*.example.com")
+	if err != nil {
+		t.Fatalf("AddCN: %v", err)
+	}
+	assertCertHasDNSName(t, secret, "*.example.com")
+}
+
+func TestRenew_PreservesWildcard(t *testing.T) {
+	tlsFactory := newTestTLS(t)
+	secret, _, err := tlsFactory.AddCN(nil, "*.example.com")
+	if err != nil {
+		t.Fatalf("AddCN: %v", err)
+	}
+	renewed, err := tlsFactory.Renew(secret)
+	if err != nil {
+		t.Fatalf("Renew: %v", err)
+	}
+	assertCertHasDNSName(t, renewed, "*.example.com")
+}
+
+func TestRegenerate_PreservesWildcard(t *testing.T) {
+	tlsFactory := newTestTLS(t)
+	secret, _, err := tlsFactory.AddCN(nil, "*.example.com")
+	if err != nil {
+		t.Fatalf("AddCN: %v", err)
+	}
+	regen, err := tlsFactory.Regenerate(secret)
+	if err != nil {
+		t.Fatalf("Regenerate: %v", err)
+	}
+	assertCertHasDNSName(t, regen, "*.example.com")
+}
+
+func TestMerge_WildcardCovering(t *testing.T) {
+	tlsFactory := newTestTLS(t)
+
+	target, _, err := tlsFactory.AddCN(nil, "*.example.com")
+	if err != nil {
+		t.Fatalf("AddCN target: %v", err)
+	}
+	additional, _, err := tlsFactory.AddCN(nil, "foo.example.com", "bar.example.com")
+	if err != nil {
+		t.Fatalf("AddCN additional: %v", err)
+	}
+
+	merged, _, err := tlsFactory.Merge(target, additional)
+	if err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+
+	// Wildcard must be present.
+	assertCertHasDNSName(t, merged, "*.example.com")
+	// And the specific names from `additional` must NOT have been added —
+	// the wildcard already covers them per RFC 6125. This is what distinguishes
+	// the cover-short-circuit path from a regenerate-fallthrough path.
+	assertCertDoesNotHaveDNSName(t, merged, "foo.example.com")
+	assertCertDoesNotHaveDNSName(t, merged, "bar.example.com")
+}
+
+func TestAddCN_WildcardAndSpecificCoexist(t *testing.T) {
+	// Realistic shape: admin configures both a wildcard SAN and one or more
+	// specific SANs in a single call. Both must end up in the cert.
+	tlsFactory := newTestTLS(t)
+	secret, _, err := tlsFactory.AddCN(nil, "*.example.com", "other.org")
+	if err != nil {
+		t.Fatalf("AddCN: %v", err)
+	}
+	assertCertHasDNSName(t, secret, "*.example.com")
+	assertCertHasDNSName(t, secret, "other.org")
 }
