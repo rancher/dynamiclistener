@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	v1 "k8s.io/api/core/v1"
 )
 
 var hashSuffixRe = regexp.MustCompile(`-[0-9a-f]{6}$`)
@@ -104,4 +106,90 @@ func TestGetAnnotationKey_LongWildcardHostname(t *testing.T) {
 	if strings.ContainsRune(key, '*') {
 		t.Errorf("key %q contains '*'", key)
 	}
+}
+
+func TestIsCoveredByWildcard(t *testing.T) {
+	cases := []struct {
+		name     string
+		cn       string
+		existing []string
+		want     bool
+	}{
+		{"wildcard covers single-label match", "foo.example.com", []string{"*.example.com"}, true},
+		{"wildcard covers when other entries also present", "a.example.com", []string{"foo.example.com", "*.example.com"}, true},
+		{"wildcard does not cover multi-label", "a.b.example.com", []string{"*.example.com"}, false},
+		{"wildcard does not cover apex", "example.com", []string{"*.example.com"}, false},
+		{"no wildcard in existing", "foo.example.com", []string{"foo.example.com", "bar.example.com"}, false},
+		{"wildcard cn never covered (exact wildcard)", "*.example.com", []string{"*.example.com"}, false},
+		{"wildcard cn never covered (more specific)", "*.foo.example.com", []string{"*.example.com"}, false},
+		{"wrong parent", "foo.evil.com", []string{"*.example.com"}, false},
+		{"cn with no dot cannot be covered", "localhost", []string{"*.localhost"}, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isCoveredByWildcard(tt.cn, tt.existing)
+			if got != tt.want {
+				t.Errorf("isCoveredByWildcard(%q, %v) = %v, want %v", tt.cn, tt.existing, got, tt.want)
+			}
+		})
+	}
+}
+
+func makeSecretWithCNs(cns ...string) *v1.Secret {
+	s := &v1.Secret{}
+	s.Annotations = map[string]string{}
+	for _, cn := range cns {
+		s.Annotations[getAnnotationKey(cn)] = cn
+	}
+	return s
+}
+
+func TestNeedsUpdate_WildcardCovers(t *testing.T) {
+	secret := makeSecretWithCNs("*.example.com")
+
+	t.Run("subdomain covered by wildcard", func(t *testing.T) {
+		if NeedsUpdate(0, secret, "foo.example.com") {
+			t.Error("NeedsUpdate should be false: foo.example.com is covered by *.example.com")
+		}
+	})
+	t.Run("multi-label not covered", func(t *testing.T) {
+		if !NeedsUpdate(0, secret, "a.b.example.com") {
+			t.Error("NeedsUpdate should be true: a.b.example.com is multi-label, not covered")
+		}
+	})
+	t.Run("apex not covered", func(t *testing.T) {
+		if !NeedsUpdate(0, secret, "example.com") {
+			t.Error("NeedsUpdate should be true: example.com is the apex, not covered by *.example.com")
+		}
+	})
+}
+
+func TestNeedsUpdate_WildcardDoesNotCoverWildcard(t *testing.T) {
+	secret := makeSecretWithCNs("*.example.com")
+
+	t.Run("exact wildcard match", func(t *testing.T) {
+		if NeedsUpdate(0, secret, "*.example.com") {
+			t.Error("NeedsUpdate should be false: exact wildcard match")
+		}
+	})
+	t.Run("more specific wildcard not covered", func(t *testing.T) {
+		if !NeedsUpdate(0, secret, "*.foo.example.com") {
+			t.Error("NeedsUpdate should be true: *.foo.example.com is a different wildcard")
+		}
+	})
+}
+
+func TestNeedsUpdate_WildcardCountsAsOneSAN(t *testing.T) {
+	t.Run("room for one more SAN", func(t *testing.T) {
+		secret := makeSecretWithCNs("a", "b", "c", "d", "e", "f", "g", "h", "i")
+		if !NeedsUpdate(10, secret, "*.new.com") {
+			t.Error("NeedsUpdate should be true: room for one more SAN")
+		}
+	})
+	t.Run("MaxSANs reached", func(t *testing.T) {
+		secret := makeSecretWithCNs("a", "b", "c", "d", "e", "f", "g", "h", "i", "j")
+		if NeedsUpdate(10, secret, "*.new.com") {
+			t.Error("NeedsUpdate should be false: MaxSANs reached")
+		}
+	})
 }
