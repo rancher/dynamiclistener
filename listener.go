@@ -17,6 +17,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+// isWildcardSAN reports whether cn is an RFC 6125 wildcard pattern.
+// Wildcards are accepted only from Config.SANs (admin), never from runtime
+// sources (TLS SNI, TCP LocalAddr, HTTP Host header).
+func isWildcardSAN(cn string) bool {
+	return strings.HasPrefix(cn, "*.")
+}
+
 type TLSStorage interface {
 	Get() (*v1.Secret, error)
 	Update(secret *v1.Secret) error
@@ -271,6 +278,9 @@ func (l *listener) checkExpiration(days int) error {
 func (l *listener) Accept() (net.Conn, error) {
 	l.init.Do(func() {
 		if len(l.sans) > 0 {
+			// Trusted path: Config.SANs is admin-controlled (--tls-san), so wildcards
+			// are permitted here. Runtime-discovered SANs (SNI, TCP, HTTP) MUST go
+			// through isWildcardSAN gates - see the call sites below.
 			if err := l.updateCert(l.sans...); err != nil {
 				logrus.Errorf("dynamiclistener %s: failed to update cert with configured SANs: %v", l.Addr(), err)
 				return
@@ -303,8 +313,10 @@ func (l *listener) Accept() (net.Conn, error) {
 		return conn, nil
 	}
 
-	if err := l.updateCert(host); err != nil {
-		logrus.Errorf("dynamiclistener %s: failed to update cert with connection local address: %v", l.Addr(), err)
+	if !isWildcardSAN(host) {
+		if err := l.updateCert(host); err != nil {
+			logrus.Errorf("dynamiclistener %s: failed to update cert with connection local address: %v", l.Addr(), err)
+		}
 	}
 
 	if l.conns != nil {
@@ -350,7 +362,9 @@ func (c *closeWrapper) Close() error {
 func (l *listener) getCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	newConn := hello.Conn
 	if hello.ServerName != "" {
-		if err := l.updateCert(hello.ServerName); err != nil {
+		if isWildcardSAN(hello.ServerName) {
+			logrus.Debugf("dynamiclistener %s: ignoring wildcard SAN from TLS SNI: %s", l.Addr(), hello.ServerName)
+		} else if err := l.updateCert(hello.ServerName); err != nil {
 			logrus.Errorf("dynamiclistener %s: failed to update cert with TLS ServerName: %v", l.Addr(), err)
 			return nil, err
 		}
@@ -483,8 +497,14 @@ func (l *listener) cacheHandler() http.Handler {
 				}
 			}
 
-			if err := l.updateCert(h); err != nil {
-				logrus.Errorf("dynamiclistener %s: failed to update cert with HTTP request Host header: %v", l.Addr(), err)
+			// Defense-in-depth: the surrounding `if len(ip) > 0` block already
+			// excludes non-IP hosts (which is where wildcards would appear). This gate
+			// guards against future relaxation of that filter - wildcards must never
+			// enter the cert from runtime-discovered HTTP Host headers.
+			if !isWildcardSAN(h) {
+				if err := l.updateCert(h); err != nil {
+					logrus.Errorf("dynamiclistener %s: failed to update cert with HTTP request Host header: %v", l.Addr(), err)
+				}
 			}
 		}
 	})
