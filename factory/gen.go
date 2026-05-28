@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	cnRegexp = regexp.MustCompile("^([A-Za-z0-9:][-A-Za-z0-9_.:]*)?[A-Za-z0-9:]$")
+	cnRegexp = regexp.MustCompile(`^(\*\.)?([A-Za-z0-9:][-A-Za-z0-9_.:]*)?[A-Za-z0-9:]$`)
 )
 
 type TLS struct {
@@ -268,22 +268,49 @@ func IsStatic(secret *v1.Secret) bool {
 
 // NeedsUpdate returns true if any of the CNs are not currently present on the
 // secret's Certificate, as recorded in the cnPrefix annotations. It will return
-// false if all requested CNs are already present, or if maxSANs is non-zero and has
+// false if all requested CNs are already present (either explicitly, or covered
+// by an existing wildcard SAN per RFC 6125), or if maxSANs is non-zero and has
 // been exceeded.
 func NeedsUpdate(maxSANs int, secret *v1.Secret, cn ...string) bool {
 	if secret == nil {
 		return true
 	}
-
+	existingCNs := cns(secret)
 	for _, cn := range cn {
-		if secret.Annotations[getAnnotationKey(cn)] == "" {
-			if maxSANs > 0 && len(cns(secret)) >= maxSANs {
-				return false
-			}
+		if secret.Annotations[getAnnotationKey(cn)] != "" {
+			continue
+		}
+		if isCoveredByWildcard(cn, existingCNs) {
+			continue
+		}
+		if maxSANs > 0 && len(existingCNs) >= maxSANs {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+// isCoveredByWildcard reports whether cn is matched by any "*.parent" entry in
+// existing, per RFC 6125 single-label leftmost-wildcard semantics.
+//
+//	"*.example.com" covers "foo.example.com" but NOT "a.b.example.com" and NOT "example.com".
+//
+// A wildcard cn is never considered covered by another wildcard.
+func isCoveredByWildcard(cn string, existing []string) bool {
+	if strings.HasPrefix(cn, "*.") {
+		return false
+	}
+	dot := strings.IndexByte(cn, '.')
+	if dot < 1 {
+		return false
+	}
+	parent := "*" + cn[dot:]
+	for _, e := range existing {
+		if e == parent {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -348,11 +375,12 @@ func NewPrivateKey() (crypto.Signer, error) {
 func getAnnotationKey(cn string) string {
 	cn = cnPrefix + cn
 	cnLen := len(cn)
-	if cnLen < 64 && !strings.ContainsRune(cn, ':') {
+	if cnLen < 64 && !strings.ContainsRune(cn, ':') && !strings.ContainsRune(cn, '*') {
 		return cn
 	}
 	digest := sha256.Sum256([]byte(cn))
 	cn = strings.ReplaceAll(cn, ":", "_")
+	cn = strings.ReplaceAll(cn, "*", "_")
 	if cnLen > 56 {
 		cnLen = 56
 	}
