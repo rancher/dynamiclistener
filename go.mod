@@ -3,7 +3,7 @@ module github.com/rancher/dynamiclistener
 go 1.26.0
 
 require (
-	github.com/rancher/wrangler/v3 v3.7.0-rc.1
+	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.52.0
