@@ -59,7 +59,8 @@ func NewListenerWithChain(l net.Listener, storage TLSStorage, caCert []*x509.Cer
 			CAKey:               caKey,
 			CN:                  config.CN,
 			Organization:        config.Organization,
-			FilterCN:            allowDefaultSANs(config.SANs, config.FilterCN),
+			FilterCN:        allowDefaultSANs(config.SANs, config.FilterCN),
+			FilterExisting: config.FilterExisting,
 			ExpirationDaysCheck: config.ExpirationDaysCheck,
 		},
 		Listener:  l,
@@ -144,7 +145,16 @@ type Config struct {
 	ExpirationDaysCheck   int
 	CloseConnOnCertChange bool
 	RegenerateCerts       func() bool
-	FilterCN              func(...string) []string
+	FilterCN func(...string) []string
+	// FilterExisting controls whether FilterCN is also applied to the set of
+	// CNs already recorded on the secret (via listener.cattle.io/cn-*
+	// annotations) during every cert operation (AddCN, Merge, Renew,
+	// Regenerate, cert generation). When true, any existing CN that FilterCN
+	// would reject is pruned from the certificate on the next write — useful
+	// for automatically removing stale dynamically-added CNs (e.g. dead pod
+	// IPs after a rolling restart) without an explicit delete-and-regenerate.
+	// false (the default) preserves all existing CNs as before.
+	FilterExisting bool
 }
 
 type listener struct {
