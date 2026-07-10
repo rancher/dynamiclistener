@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/google/renameio/v2"
 	"github.com/rancher/dynamiclistener"
 	v1 "k8s.io/api/core/v1"
 )
@@ -47,5 +46,5 @@ func (s *storage) Update(secret *v1.Secret) error {
 		return err
 	}
 
-	return renameio.WriteFile(s.file, b.Bytes(), 0600, renameio.IgnoreUmask())
+	return writeFile(s.file, b.Bytes(), 0600)
 }
