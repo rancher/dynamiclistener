@@ -3,6 +3,7 @@ module github.com/rancher/dynamiclistener
 go 1.25.0
 
 require (
+	github.com/google/renameio/v2 v2.0.2
 	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
