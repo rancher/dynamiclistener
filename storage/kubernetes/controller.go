@@ -35,7 +35,7 @@ type storage struct {
 
 	// mu guards queuedSecret, which is set from the Update caller and the
 	// secret watch goroutine, and read by the workqueue processor.
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	queuedSecret *v1.Secret
 }
 
@@ -46,8 +46,8 @@ func (s *storage) setQueuedSecret(secret *v1.Secret) {
 }
 
 func (s *storage) getQueuedSecret() *v1.Secret {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.queuedSecret
 }
 
