@@ -150,50 +150,53 @@ func makeSecretWithCNs(cns ...string) *v1.Secret {
 }
 
 func TestNeedsUpdate_WildcardCovers(t *testing.T) {
+	var tls TLS
 	secret := makeSecretWithCNs("*.example.com")
 
 	t.Run("subdomain covered by wildcard", func(t *testing.T) {
-		if NeedsUpdate(0, secret, "foo.example.com") {
+		if tls.NeedsUpdate(0, secret, "foo.example.com") {
 			t.Error("NeedsUpdate should be false: foo.example.com is covered by *.example.com")
 		}
 	})
 	t.Run("multi-label not covered", func(t *testing.T) {
-		if !NeedsUpdate(0, secret, "a.b.example.com") {
+		if !tls.NeedsUpdate(0, secret, "a.b.example.com") {
 			t.Error("NeedsUpdate should be true: a.b.example.com is multi-label, not covered")
 		}
 	})
 	t.Run("apex not covered", func(t *testing.T) {
-		if !NeedsUpdate(0, secret, "example.com") {
+		if !tls.NeedsUpdate(0, secret, "example.com") {
 			t.Error("NeedsUpdate should be true: example.com is the apex, not covered by *.example.com")
 		}
 	})
 }
 
 func TestNeedsUpdate_WildcardDoesNotCoverWildcard(t *testing.T) {
+	var tls TLS
 	secret := makeSecretWithCNs("*.example.com")
 
 	t.Run("exact wildcard match", func(t *testing.T) {
-		if NeedsUpdate(0, secret, "*.example.com") {
+		if tls.NeedsUpdate(0, secret, "*.example.com") {
 			t.Error("NeedsUpdate should be false: exact wildcard match")
 		}
 	})
 	t.Run("more specific wildcard not covered", func(t *testing.T) {
-		if !NeedsUpdate(0, secret, "*.foo.example.com") {
+		if !tls.NeedsUpdate(0, secret, "*.foo.example.com") {
 			t.Error("NeedsUpdate should be true: *.foo.example.com is a different wildcard")
 		}
 	})
 }
 
 func TestNeedsUpdate_WildcardCountsAsOneSAN(t *testing.T) {
+	var tls TLS
 	t.Run("room for one more SAN", func(t *testing.T) {
 		secret := makeSecretWithCNs("a", "b", "c", "d", "e", "f", "g", "h", "i")
-		if !NeedsUpdate(10, secret, "*.new.com") {
+		if !tls.NeedsUpdate(10, secret, "*.new.com") {
 			t.Error("NeedsUpdate should be true: room for one more SAN")
 		}
 	})
 	t.Run("MaxSANs reached", func(t *testing.T) {
 		secret := makeSecretWithCNs("a", "b", "c", "d", "e", "f", "g", "h", "i", "j")
-		if NeedsUpdate(10, secret, "*.new.com") {
+		if tls.NeedsUpdate(10, secret, "*.new.com") {
 			t.Error("NeedsUpdate should be false: MaxSANs reached")
 		}
 	})
