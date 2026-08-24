@@ -4,11 +4,9 @@
   ],
   "baseBranchPatterns": [
     "main",
+    "release/v0.8",
     "release/v0.7",
-    "release/v0.6",
-    "release/v0.5",
-    "release/v0.4",
-    "release/v0.3"
+    "release/v0.6"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
@@ -18,10 +16,56 @@
   ],
   "packageRules": [
     {
+      "description": "release/v0.8 supports Kubernetes v1.27 - v1.35 (see VERSION.md); cap k8s.io/* to the matching client-go line",
+      "matchManagers": ["gomod"],
+      "matchBaseBranches": ["release/v0.8"],
+      "matchPackageNames": [
+        "!k8s.io/utils",
+        "!k8s.io/utils/**",
+        "!k8s.io/kube-openapi",
+        "!k8s.io/kube-openapi/**",
+        "!k8s.io/klog/v2",
+        "!k8s.io/klog/v2/**",
+        "k8s.io/**"
+      ],
+      "allowedVersions": "<0.36",
+      "groupName": "Kubernetes dependencies"
+    },
+    {
+      "description": "release/v0.7 supports Kubernetes v1.27 - v1.34 (see VERSION.md); cap k8s.io/* to the matching client-go line",
+      "matchManagers": ["gomod"],
+      "matchBaseBranches": ["release/v0.7"],
+      "matchPackageNames": [
+        "!k8s.io/utils",
+        "!k8s.io/utils/**",
+        "!k8s.io/kube-openapi",
+        "!k8s.io/kube-openapi/**",
+        "!k8s.io/klog/v2",
+        "!k8s.io/klog/v2/**",
+        "k8s.io/**"
+      ],
+      "allowedVersions": "<0.35",
+      "groupName": "Kubernetes dependencies"
+    },
+    {
+      "description": "release/v0.6 supports Kubernetes v1.27 - v1.32 (see VERSION.md); cap k8s.io/* to the matching client-go line",
+      "matchManagers": ["gomod"],
+      "matchBaseBranches": ["release/v0.6"],
+      "matchPackageNames": [
+        "!k8s.io/utils",
+        "!k8s.io/utils/**",
+        "!k8s.io/kube-openapi",
+        "!k8s.io/kube-openapi/**",
+        "!k8s.io/klog/v2",
+        "!k8s.io/klog/v2/**",
+        "k8s.io/**"
+      ],
+      "allowedVersions": "<0.33",
+      "groupName": "Kubernetes dependencies"
+    },
+    {
       "enabled": false,
       "matchPackageNames": [
-        "/k8s.io/*/",
-        "/sigs.k8s.io/*/",
         "/github.com/prometheus/*/",
         "/github.com/rancher/wrangler/*/"
       ]
