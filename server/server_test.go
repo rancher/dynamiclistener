@@ -6,12 +6,24 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	assertPkg "github.com/stretchr/testify/assert"
+)
+
+const (
+	// logWaitTimeout bounds how long a test waits for an asynchronously
+	// written server log to show up, and logPollInterval how often it looks.
+	logWaitTimeout  = 10 * time.Second
+	logPollInterval = 10 * time.Millisecond
+
+	// logSettleDelay is how long a test waits before asserting that a server
+	// log was never written.
+	logSettleDelay = 500 * time.Millisecond
 )
 
 type alwaysPanicHandler struct {
@@ -87,15 +99,20 @@ func TestHttpServerLogWithLogrus(t *testing.T) {
 	var buf bytes.Buffer
 	var mutex sync.Mutex
 	safeWriter := newSafeWriter(&buf, &mutex)
-	err := doRequest(safeWriter, message, logrus.ErrorLevel)
+	err := doRequest(safeWriter, 9012, message, logrus.ErrorLevel)
 	assert.Nil(err)
 
-	mutex.Lock()
-	s := buf.String()
-	assert.Greater(len(s), 0)
-	assert.Contains(s, msg)
-	assert.Contains(s, "panic serving 127.0.0.1")
-	mutex.Unlock()
+	// ListenAndServe hands http.Server an ErrorLog backed by
+	// logrus.Logger.WriterLevel, which is an *io.PipeWriter drained by a
+	// background goroutine. The server's panic log therefore reaches the
+	// logrus output some time after the client request has failed, so poll
+	// for it instead of reading the buffer once.
+	assert.Eventually(func() bool {
+		mutex.Lock()
+		defer mutex.Unlock()
+		s := buf.String()
+		return strings.Contains(s, msg) && strings.Contains(s, "panic serving 127.0.0.1")
+	}, logWaitTimeout, logPollInterval, "server panic was never logged")
 }
 
 func TestHttpNoServerLogsWithLogrus(t *testing.T) {
@@ -105,8 +122,12 @@ func TestHttpNoServerLogsWithLogrus(t *testing.T) {
 	var buf bytes.Buffer
 	var mutex sync.Mutex
 	safeWriter := newSafeWriter(&buf, &mutex)
-	err := doRequest(safeWriter, message, logrus.DebugLevel)
+	err := doRequest(safeWriter, 9013, message, logrus.DebugLevel)
 	assert.Nil(err)
+
+	// Nothing to poll for here: give the asynchronous writer a chance to
+	// emit before asserting that it never does.
+	time.Sleep(logSettleDelay)
 
 	mutex.Lock()
 	s := buf.String()
@@ -116,11 +137,10 @@ func TestHttpNoServerLogsWithLogrus(t *testing.T) {
 	mutex.Unlock()
 }
 
-func doRequest(safeWriter *safeWriter, message string, logLevel logrus.Level) error {
+func doRequest(safeWriter *safeWriter, httpPort int, message string, logLevel logrus.Level) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	host := "127.0.0.1"
-	httpPort := 9012
 	httpsPort := 0
 	msg := fmt.Sprintf("panicking context: %s", message)
 	handler := alwaysPanicHandler{msg: msg}
