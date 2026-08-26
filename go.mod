@@ -6,7 +6,7 @@ require (
 	github.com/google/renameio/v2 v2.0.2
 	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/sirupsen/logrus v1.10.0
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	golang.org/x/crypto v0.55.0
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
