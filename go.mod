@@ -1,13 +1,13 @@
 module github.com/rancher/dynamiclistener
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/google/renameio/v2 v2.0.2
 	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/sirupsen/logrus v1.10.1
 	github.com/stretchr/testify v1.12.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	k8s.io/api v0.35.8
 	k8s.io/apimachinery v0.35.8
 	k8s.io/client-go v0.35.8
