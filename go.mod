@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/rancher/wrangler/v3 v3.3.5
-	github.com/sirupsen/logrus v1.10.1
+	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.53.0
 	k8s.io/api v0.34.11
