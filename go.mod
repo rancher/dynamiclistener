@@ -1,6 +1,6 @@
 module github.com/rancher/dynamiclistener
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/google/renameio/v2 v2.0.2
