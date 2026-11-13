@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -30,6 +31,8 @@ const (
 
 var (
 	cnRegexp = regexp.MustCompile(`^(\*\.)?([A-Za-z0-9:][-A-Za-z0-9_.:]*)?[A-Za-z0-9:]$`)
+
+	fipsEnabled = fips140.Enabled
 )
 
 type TLS struct {
@@ -249,9 +252,17 @@ func (t *TLS) generateCert(secret *v1.Secret, cn ...string) (*v1.Secret, bool, e
 	secret.Type = v1.SecretTypeTLS
 	secret.Data[v1.TLSCertKey] = certBytes
 	secret.Data[v1.TLSPrivateKeyKey] = keyBytes
-	secret.Annotations[Fingerprint] = fmt.Sprintf("SHA1=%X", sha1.Sum(newCert.Raw))
+	secret.Annotations[Fingerprint] = fingerprint(newCert.Raw)
 
 	return secret, true, nil
+}
+
+// fingerprint keeps SHA-1 outside FIPS mode so existing annotations still match.
+func fingerprint(raw []byte) string {
+	if fipsEnabled() {
+		return fmt.Sprintf("SHA256=%X", sha256.Sum256(raw))
+	}
+	return fmt.Sprintf("SHA1=%X", sha1.Sum(raw))
 }
 
 func (t *TLS) IsExpired(secret *v1.Secret) bool {
