@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -249,7 +250,9 @@ func (t *TLS) generateCert(secret *v1.Secret, cn ...string) (*v1.Secret, bool, e
 	secret.Type = v1.SecretTypeTLS
 	secret.Data[v1.TLSCertKey] = certBytes
 	secret.Data[v1.TLSPrivateKeyKey] = keyBytes
-	secret.Annotations[Fingerprint] = fmt.Sprintf("SHA1=%X", sha1.Sum(newCert.Raw))
+	fips140.WithoutEnforcement(func() {
+		secret.Annotations[Fingerprint] = fmt.Sprintf("SHA1=%X", sha1.Sum(newCert.Raw))
+	})
 
 	return secret, true, nil
 }
